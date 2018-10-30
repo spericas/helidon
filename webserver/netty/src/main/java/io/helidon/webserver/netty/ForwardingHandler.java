@@ -40,6 +40,8 @@ import io.netty.handler.codec.http.LastHttpContent;
 
 import static io.netty.handler.codec.http.HttpResponseStatus.CONTINUE;
 import static io.netty.handler.codec.http.HttpVersion.HTTP_1_1;
+import io.netty.handler.codec.http.multipart.HttpPostMultipartRequestDecoder;
+import io.netty.handler.codec.http.multipart.InterfaceHttpData;
 
 /**
  * ForwardingHandler bridges Netty response and request related APIs to
@@ -109,8 +111,8 @@ public class ForwardingHandler extends SimpleChannelInboundHandler<Object> {
 
             bareResponse.whenCompleted()
                         .thenRun(() -> {
-                            RequestContext requestContext = this.requestContext;
-                            requestContext.responseCompleted(true);
+                            RequestContext reqCtx = this.requestContext;
+                            reqCtx.responseCompleted(true);
                             /*
                              * Cleanup for these queues is done in HttpInitializer. However,
                              * it may take a while for the event loop on the channel to
@@ -137,6 +139,15 @@ public class ForwardingHandler extends SimpleChannelInboundHandler<Object> {
             }
 
             HttpContent httpContent = (HttpContent) msg;
+            HttpPostMultipartRequestDecoder decoder =
+                    new HttpPostMultipartRequestDecoder(requestContext.request());
+
+            if(decoder.isMultipart()){
+                decoder.offer(httpContent);
+                while(decoder.hasNext()){
+                    InterfaceHttpData next = decoder.next();
+                }
+            }
 
             ByteBuf content = httpContent.content();
             if (content.isReadable()) {

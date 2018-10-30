@@ -43,6 +43,7 @@ import io.netty.handler.codec.http2.Http2ServerUpgradeCodec;
 import io.netty.handler.ssl.SslContext;
 import io.netty.handler.ssl.SslHandler;
 import io.netty.util.AsciiString;
+import java.util.logging.Level;
 
 /**
  * The HttpInitializer.
@@ -118,7 +119,7 @@ class HttpInitializer extends ChannelInitializer<SocketChannel> {
     private static final class HelidonEventLogger extends ChannelInboundHandlerAdapter {
         @Override
         public void userEventTriggered(ChannelHandlerContext ctx, Object evt) {
-            LOGGER.info("Event Triggered: " + evt);
+            LOGGER.log(Level.INFO, "Event Triggered: {0}", evt);
             ctx.fireUserEventTriggered(evt);
         }
     }

@@ -90,6 +90,7 @@ class HttpRequestScopedPublisher extends OriginThreadPublisher {
      * next item. In case a {@link Long#MAX_VALUE} is returned,
      * the requester is informed that unlimited number of items can be published.
      */
+    @Override
     long tryAcquire() {
         try {
             lock.lock();

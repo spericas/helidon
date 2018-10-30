@@ -58,7 +58,7 @@ class OriginThreadPublisher implements Flow.Publisher<DataChunk> {
     private final BlockingQueue<ByteBufRequestChunk> queue = new ArrayBlockingQueue<>(256);
     private final ReferenceHoldingQueue<ByteBufRequestChunk> referenceQueue;
 
-    private AtomicLong nextCount = new AtomicLong();
+    private final AtomicLong nextCount = new AtomicLong();
     private volatile long reqCount = 0;
 
     /**
