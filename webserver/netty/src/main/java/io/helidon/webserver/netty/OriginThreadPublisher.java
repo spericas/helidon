@@ -26,6 +26,7 @@ import java.util.logging.Logger;
 
 import io.helidon.common.http.DataChunk;
 import io.helidon.common.reactive.Flow;
+import io.helidon.webserver.netty.MultipartDecoder.MixedMultipartChunk;
 
 import io.netty.buffer.ByteBuf;
 
@@ -197,26 +198,7 @@ class OriginThreadPublisher implements Flow.Publisher<DataChunk> {
     void submit(ByteBuf data) {
         try {
             reentrantLock.lock();
-
-            ByteBufRequestChunk chunk = new ByteBufRequestChunk(data, referenceQueue);
-
-            if (!queue.offer(chunk)) {
-                LOGGER.severe("Unable to add an element to the publisher cache.");
-                error(new IllegalStateException("Unable to add an element to the publisher cache."));
-                return;
-            }
-
-            if (nextCount.get() < reqCount) {
-                nextCount.incrementAndGet();
-                // the poll is never expected to return null
-                ByteBufRequestChunk item = queue.poll();
-
-                LOGGER.finest(() -> "Publishing request chunk: " + (null == item ? "null" : item.id()));
-                singleSubscriber.onNext(item);
-            } else {
-                LOGGER.finest(() -> "Not publishing due to low request count: " + nextCount + " <= " + reqCount);
-            }
-
+            submit(new ByteBufRequestChunk(data, referenceQueue));
         } catch (RuntimeException e) {
             if (singleSubscriber == null) {
                 t = e;
@@ -226,6 +208,42 @@ class OriginThreadPublisher implements Flow.Publisher<DataChunk> {
         } finally {
             reentrantLock.unlock();
             referenceQueue.release();
+        }
+    }
+
+    void submit(final MixedMultipartChunk chunk) {
+        try {
+            reentrantLock.lock();
+            submit(new ByteBufMultiPartRequestChunk(chunk.buf(),
+                    chunk.headers(), chunk.isLast(), referenceQueue));
+        } catch (RuntimeException e) {
+            if (singleSubscriber == null) {
+                t = e;
+            } else {
+                error(new IllegalStateException("An error occurred when submitting data.", e));
+            }
+        } finally {
+            reentrantLock.unlock();
+            referenceQueue.release();
+        }
+    }
+
+    private void submit(ByteBufRequestChunk chunk){
+        if (!queue.offer(chunk)) {
+            LOGGER.severe("Unable to add an element to the publisher cache.");
+            error(new IllegalStateException("Unable to add an element to the publisher cache."));
+            return;
+        }
+
+        if (nextCount.get() < reqCount) {
+            nextCount.incrementAndGet();
+            // the poll is never expected to return null
+            ByteBufRequestChunk item = queue.poll();
+
+            LOGGER.finest(() -> "Publishing request chunk: " + (null == item ? "null" : item.id()));
+            singleSubscriber.onNext(item);
+        } else {
+            LOGGER.finest(() -> "Not publishing due to low request count: " + nextCount + " <= " + reqCount);
         }
     }
 

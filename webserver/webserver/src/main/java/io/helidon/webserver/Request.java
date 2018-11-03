@@ -74,7 +74,7 @@ abstract class Request implements ServerRequest {
         this.context = ContextualRegistry.create(webServer.context());
         this.queryParams = UriComponent.decodeQuery(req.getUri().getRawQuery(), true);
         this.headers = new HashRequestHeaders(bareRequest.getHeaders());
-        this.content = new Content();
+        this.content = new Content(this, bareRequest.bodyPublisher());
     }
 
     /**
@@ -199,16 +199,18 @@ abstract class Request implements ServerRequest {
         }
     }
 
-    class Content implements io.helidon.common.http.Content {
+    static class Content implements io.helidon.common.http.Content {
 
         private final Flow.Publisher<DataChunk> originalPublisher;
         private final Deque<InternalReader<?>> readers;
         private final List<Function<Flow.Publisher<DataChunk>, Flow.Publisher<DataChunk>>> filters;
         private final ReadWriteLock readersLock;
         private final ReadWriteLock filtersLock;
+        private final Request request;
 
-        private Content() {
-            this.originalPublisher = bareRequest.bodyPublisher();
+        Content(Request request, Flow.Publisher<DataChunk> originalPublisher){
+            this.request = request;
+            this.originalPublisher = originalPublisher;
             this.readers = new LinkedList<>();
             this.filters = new ArrayList<>();
             this.readersLock = new ReentrantReadWriteLock();
@@ -216,6 +218,7 @@ abstract class Request implements ServerRequest {
         }
 
         private Content(Content orig) {
+            this.request = orig.request;
             this.originalPublisher = orig.originalPublisher;
             this.readers = orig.readers;
             this.filters = orig.filters;
@@ -258,7 +261,6 @@ abstract class Request implements ServerRequest {
             return new InternalReader<>(aClass -> aClass.isAssignableFrom(clazz), reader);
         }
 
-
         @Override
         @SuppressWarnings("unchecked")
         public <T> CompletionStage<T> as(Class<T> type) {
@@ -298,9 +300,9 @@ abstract class Request implements ServerRequest {
         }
 
         private <T> Span createReadSpan(Class<T> type) {
-            Tracer.SpanBuilder spanBuilder = tracer().buildSpan("content-read");
-            if (span() != null) {
-                spanBuilder.asChildOf(span());
+            Tracer.SpanBuilder spanBuilder = request.tracer().buildSpan("content-read");
+            if (request.span() != null) {
+                spanBuilder.asChildOf(request.span());
             }
             if (type != null) {
                 spanBuilder.withTag("requested.type", type.getName());
@@ -316,7 +318,7 @@ abstract class Request implements ServerRequest {
         }
 
         private StringContentReader stringContentReader() {
-            String charset = requestContentCharset(Request.this);
+            String charset = requestContentCharset(request);
             StringContentReader reader = ContentReaders.cachedStringReader(charset);
             return reader != null ? reader : new StringContentReader(charset);
         }

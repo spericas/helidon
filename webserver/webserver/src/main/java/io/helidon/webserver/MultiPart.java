@@ -13,22 +13,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package io.helidon.webserver;
 
 /**
+ * An entity that represents a top level multipart payload (i.e all the body parts in the request),
+ * or a nested part payload in the case of a multipart-mixed request. Only 1 level of
+ * nested parts is supported.
  *
- * @author rgrecour
+ * The number of body parts in the request is not known ahead of time.
  */
-public class MultipartSupport implements Service, Handler {
-
-    @Override
-    public void update(Routing.Rules rules) {
-        rules.any(this);
-    }
-
-    @Override
-    public void accept(ServerRequest req, ServerResponse res) {
-        
-    }
-}
+public interface MultiPart extends BodyPart, Iterable<BodyPart> { }

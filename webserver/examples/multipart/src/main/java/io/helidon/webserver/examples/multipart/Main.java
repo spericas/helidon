@@ -16,6 +16,8 @@
 
 package io.helidon.webserver.examples.multipart;
 
+import io.helidon.webserver.MultiPart;
+import io.helidon.webserver.MultiPartSupport;
 import io.helidon.webserver.Routing;
 import io.helidon.webserver.ServerConfiguration;
 import io.helidon.webserver.StaticContentSupport;
@@ -38,8 +40,17 @@ public class Main {
                 .register(StaticContentSupport.builder("/static", Main.class.getClassLoader())
                         .welcomeFileName("index.html")
                         .build())
+                .register(new MultiPartSupport())
                 .any("/upload", (req, res) -> {
-                    res.send("OK");
+                    req.content().as(MultiPart.class).thenAccept((multiPart) -> {
+                        multiPart.forEach((bodyPart) -> {
+                            bodyPart.content().as(String.class).thenAccept((str) -> {
+                                System.out.println("File uploaded !");
+                                System.out.println(str);
+                            });
+                        });
+                        res.send("Files uploaded successfully");
+                    });
                 })
                 .build();
     }

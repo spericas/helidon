@@ -24,6 +24,7 @@ import javax.net.ssl.SSLEngine;
 
 import io.helidon.webserver.BadRequestException;
 import io.helidon.webserver.Routing;
+import io.helidon.webserver.netty.MultipartDecoder.MixedMultipartChunk;
 import io.helidon.webserver.spi.BareRequest;
 import io.helidon.webserver.spi.BareResponse;
 
@@ -62,6 +63,7 @@ public class ForwardingHandler extends SimpleChannelInboundHandler<Object> {
     // this field is always accessed by the very same thread; as such, it doesn't need to be
     // concurrency aware
     private RequestContext requestContext;
+    private MultipartDecoder multipartDecoder;
 
     ForwardingHandler(Routing routing,
                       NettyWebServer webServer,
@@ -97,6 +99,12 @@ public class ForwardingHandler extends SimpleChannelInboundHandler<Object> {
             ctx.channel().config().setAutoRead(false);
 
             HttpRequest request = (HttpRequest) msg;
+
+            // XXX MULTIPART
+            if(MultipartDecoder.isMultipart(request)){
+                multipartDecoder = new MultipartDecoder(request);
+            }
+
             ReferenceHoldingQueue<ByteBufRequestChunk> queue = new ReferenceHoldingQueue<>();
             queues.add(queue);
             requestContext = new RequestContext(new HttpRequestScopedPublisher(ctx, queue), request);
@@ -139,18 +147,20 @@ public class ForwardingHandler extends SimpleChannelInboundHandler<Object> {
             }
 
             HttpContent httpContent = (HttpContent) msg;
-            HttpPostMultipartRequestDecoder decoder =
-                    new HttpPostMultipartRequestDecoder(requestContext.request());
-
-            if(decoder.isMultipart()){
-                decoder.offer(httpContent);
-                while(decoder.hasNext()){
-                    InterfaceHttpData next = decoder.next();
-                }
+            boolean readable;
+            MixedMultipartChunk chunk;
+            ByteBuf content;
+            if(multipartDecoder != null){
+                chunk = multipartDecoder.decode(httpContent);
+                readable = chunk.isReadable();
+                content = null;
+            } else {
+                chunk = null;
+                content = httpContent.content();
+                readable = content.isReadable();
             }
 
-            ByteBuf content = httpContent.content();
-            if (content.isReadable()) {
+            if (readable) {
                 HttpMethod method = requestContext.request().method();
 
                 // compliance with RFC 7231
@@ -167,13 +177,23 @@ public class ForwardingHandler extends SimpleChannelInboundHandler<Object> {
                     LOGGER.finer(() -> "Closing connection because request payload was not consumed; method: " + method);
                     ctx.close();
                 } else {
-                    requestContext.publisher().submit(content);
+                    if(content != null){
+                        requestContext.publisher().submit(content);
+                    } else {
+                        requestContext.publisher().submit(chunk);
+                    }
                 }
             }
 
             if (msg instanceof LastHttpContent) {
                 requestContext.publisher().complete();
                 requestContext = null; // just to be sure that current http req/res session doesn't interfere with other ones
+
+                // XXX MULTIPART
+                if(multipartDecoder != null){
+                    multipartDecoder.destroy();
+                    multipartDecoder = null;
+                }
 
                 // with the last http request content, the tcp connection has to become 'autoReadable'
                 // so that next http request can be obtained
