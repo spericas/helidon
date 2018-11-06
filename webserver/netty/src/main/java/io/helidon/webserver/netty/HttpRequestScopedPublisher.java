@@ -68,9 +68,8 @@ class HttpRequestScopedPublisher extends OriginThreadPublisher {
         try {
             lock.lock();
 
-            if (suspended && super.tryAcquire() > 0) {
+            if (super.tryAcquire() > 0) {
                 suspended = false;
-
                 LOGGER.finest("Requesting next chunks from Netty.");
                 ctx.channel().read();
             } else {

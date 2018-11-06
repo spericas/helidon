@@ -118,6 +118,8 @@ public class MultipartDecoder {
      */
     private BodyPartHeaders currentBodyPartHeaders;
 
+    // TODO need a currentParts.
+
     /**
      * Multipart attribute.
      */
@@ -364,6 +366,7 @@ public class MultipartDecoder {
         final ByteBuf undecodedChunk = buf.copy();
         if (undecodedChunk == null || undecodedChunk.readableBytes() == 0) {
             // nothing to decode
+            // return empty chunk ?
             return null;
         }
         MultiPartChunk chunk = decodeMultipart(currentStatus, undecodedChunk);
@@ -429,9 +432,10 @@ public class MultipartDecoder {
                     "Should not be called with the current getStatus");
         case HEADERDELIMITER: {
             // --AaB03x or --AaB03x--
-            return findMultipartDelimiter(multipartDataBoundary,
+            MultiPartStatus status = findMultipartDelimiter(multipartDataBoundary,
                     MultiPartStatus.DISPOSITION, MultiPartStatus.PREEPILOGUE,
                     undecodedChunk);
+           return decodeMultipart(status, undecodedChunk);
         }
         case DISPOSITION: {
             // content-disposition: form-data; name="field1"
@@ -443,7 +447,9 @@ public class MultipartDecoder {
             // Content-Transfer-Encoding: binary
             // The following line implies a change of mode (mixed mode)
             // Content-type: multipart/mixed, boundary=BbC04y
-            return findMultipartDisposition(undecodedChunk);
+            // XXX
+            readAttributes(undecodedChunk);
+            return decodeMultipart(currentStatus, undecodedChunk);
         }
         case FIELD: {
             // Now get value according to Content-Type and Charset
@@ -491,22 +497,31 @@ public class MultipartDecoder {
         case MIXEDDELIMITER: {
             // --AaB03x or --AaB03x--
             // Note that currentFieldAttributes exists
-            return findMultipartDelimiter(multipartMixedBoundary,
+            MultiPartStatus status = findMultipartDelimiter(multipartMixedBoundary,
                     MultiPartStatus.MIXEDDISPOSITION,
                     MultiPartStatus.HEADERDELIMITER,
                     undecodedChunk);
+            // XXX
+            return decodeMultipart(status, undecodedChunk);
         }
         case MIXEDDISPOSITION: {
-            return findMultipartDisposition(undecodedChunk);
+            readAttributes(undecodedChunk);
+            return decodeMultipart(currentStatus, undecodedChunk);
         }
         case MIXEDFILEUPLOAD: {
             // eventually restart from existing FileUpload
             return getFileUpload(multipartMixedBoundary, undecodedChunk);
         }
         case PREEPILOGUE:
+            // return empty chunk ?
             return null;
         case EPILOGUE:
+            // return empty chunk ?
             return null;
+        case NODELIMITERFOUND:
+            // XXX return what ?
+            readAttributes(undecodedChunk);
+            return decodeMultipart(currentStatus, undecodedChunk);
         default:
             throw new ErrorDataDecoderException("Shouldn't reach here.");
         }
@@ -521,30 +536,36 @@ public class MultipartDecoder {
      * @return the next InterfaceHttpData if any
      * @throws ErrorDataDecoderException
      */
-    private MultiPartChunk findMultipartDelimiter(final String delimiter,
+    private MultiPartStatus findMultipartDelimiter(final String delimiter,
             final MultiPartStatus dispositionStatus,
             final MultiPartStatus closeDelimiterStatus,
             final ByteBuf undecodedChunk) {
 
         // --AaB03x or --AaB03x--
-        int readerIndex = undecodedChunk.readerIndex();
+        // XXX
+//        int readerIndex = undecodedChunk.readerIndex();
         try {
             skipControlCharacters(undecodedChunk);
         } catch (NotEnoughDataDecoderException ignored) {
-            undecodedChunk.readerIndex(readerIndex);
-            return null;
+//            undecodedChunk.readerIndex(readerIndex);
+            // XXX
+            return MultiPartStatus.NODELIMITERFOUND;
         }
         skipOneLine(undecodedChunk);
         String newline;
         try {
             newline = readDelimiter(undecodedChunk, delimiter);
         } catch (NotEnoughDataDecoderException ignored) {
-            undecodedChunk.readerIndex(readerIndex);
-            return null;
+//            undecodedChunk.readerIndex(readerIndex);
+            // XXX
+            return MultiPartStatus.NODELIMITERFOUND;
+//            return null;
         }
         if (newline.equals(delimiter)) {
             currentStatus = dispositionStatus;
-            return decodeMultipart(dispositionStatus, undecodedChunk);
+            return dispositionStatus;
+            // XXX
+//            return decodeMultipart(dispositionStatus, undecodedChunk);
         }
         if (newline.equals(delimiter + "--")) {
             // CLOSEDELIMITER or MIXED CLOSEDELIMITER found
@@ -553,13 +574,17 @@ public class MultipartDecoder {
                 // MIXEDCLOSEDELIMITER
                 // end of the Mixed part
                 currentAttributes = null;
-                return decodeMultipart(MultiPartStatus.HEADERDELIMITER,
-                        undecodedChunk);
+                return MultiPartStatus.HEADERDELIMITER;
+                // XXX
+//                return decodeMultipart(MultiPartStatus.HEADERDELIMITER,
+//                        undecodedChunk);
             }
-            return null;
+            return closeDelimiterStatus;
         }
-        undecodedChunk.readerIndex(readerIndex);
-        throw new ErrorDataDecoderException("No Multipart delimiter found");
+        // XXX
+        return MultiPartStatus.NODELIMITERFOUND;
+//        undecodedChunk.readerIndex(readerIndex);
+//        throw new ErrorDataDecoderException("No Multipart delimiter found");
     }
 
     /**
@@ -567,8 +592,8 @@ public class MultipartDecoder {
      * @return the next InterfaceHttpData if any
      * @throws ErrorDataDecoderException
      */
-    private MultiPartChunk findMultipartDisposition(
-            final ByteBuf undecodedChunk) {
+    // XXX renamed from findContentDisposition to readAttributes
+    private void readAttributes(final ByteBuf undecodedChunk) {
 
         int readerIndex = undecodedChunk.readerIndex();
         if (currentStatus == MultiPartStatus.DISPOSITION) {
@@ -584,7 +609,7 @@ public class MultipartDecoder {
             } catch (NotEnoughDataDecoderException ignored) {
                 undecodedChunk.readerIndex(readerIndex);
                 // XXX is this an error ?
-                return null;
+                throw new IllegalStateException("What should be done XXX ");
             }
             String[] contents = splitMultipartHeader(newline);
             if (HttpHeaderNames.CONTENT_DISPOSITION
@@ -637,9 +662,10 @@ public class MultipartDecoder {
                                 contents[2],'=');
                         multipartMixedBoundary = "--" + values;
                         currentStatus = MultiPartStatus.MIXEDDELIMITER;
-                        // XXX check type
-                        return (MixedMultipartChunk) decodeMultipart(
-                                MultiPartStatus.MIXEDDELIMITER, undecodedChunk);
+                        // XXX
+                        return;
+//                        return (MixedMultipartChunk) decodeMultipart(
+//                                MultiPartStatus.MIXEDDELIMITER, undecodedChunk);
                     } else {
                         throw new ErrorDataDecoderException(
                                 "Mixed Multipart found in a previous Mixed Multipart");
@@ -677,21 +703,27 @@ public class MultipartDecoder {
                 // FileUpload
                 currentStatus = MultiPartStatus.FILEUPLOAD;
                 // do not change the buffer position
-                return decodeMultipart(MultiPartStatus.FILEUPLOAD,
-                        undecodedChunk);
+                // XXX
+                return;
+//                return decodeMultipart(MultiPartStatus.FILEUPLOAD,
+//                        undecodedChunk);
             } else {
                 // Field
                 currentStatus = MultiPartStatus.FIELD;
                 // do not change the buffer position
-                return decodeMultipart(MultiPartStatus.FIELD,undecodedChunk);
+                // XXX
+                return;
+//                return decodeMultipart(MultiPartStatus.FIELD, undecodedChunk);
             }
         } else {
             if (filenameAttribute != null) {
                 // FileUpload
                 currentStatus = MultiPartStatus.MIXEDFILEUPLOAD;
                 // do not change the buffer position
-                return decodeMultipart(MultiPartStatus.MIXEDFILEUPLOAD,
-                        undecodedChunk);
+                // XXX
+                return;
+//                return decodeMultipart(MultiPartStatus.MIXEDFILEUPLOAD,
+//                        undecodedChunk);
             } else {
                 // Field is not supported in MIXED mode
                 throw new ErrorDataDecoderException("Filename not found");
@@ -869,6 +901,12 @@ public class MultipartDecoder {
         MixedMultipartChunk chunk = new MixedMultipartChunk(
                 loadDataMultipart(undecodedChunk, delimiter),
                 currentBodyPartHeaders);
+
+        // XXX this httpContent event could represent multiple parts
+        // each would be delivered in one chunk, thus each chunk would be
+        // the last one for their part
+        // TODO return LinkedList<Chunk>.
+        // How to tell if there are other parts ?
         if (chunk.isLast()) {
             // ready to load the next one
             if (currentStatus == MultiPartStatus.FILEUPLOAD) {
@@ -878,9 +916,11 @@ public class MultipartDecoder {
                 currentStatus = MultiPartStatus.MIXEDDELIMITER;
                 cleanMixedAttributes();
             }
+            // testing currentBodyPartHeaders == null
+            // means processing new part (i.e. new fileupload)
             currentBodyPartHeaders = null;
         }
-        return  chunk;
+        return chunk;
     }
 
     /**
@@ -897,22 +937,27 @@ public class MultipartDecoder {
         }
         final SeekAheadOptimize sao = new SeekAheadOptimize(undecodedChunk);
         final int startReaderIndex = undecodedChunk.readerIndex();
-        final int delimeterLength = delimiter.length();
+        final int delimeterLength = delimiter != null ? delimiter.length() : -1;
         int index = 0;
         int lastRealPos = sao.pos;
         byte prevByte = HttpConstants.LF;
         boolean delimiterFound = false;
         while (sao.pos < sao.limit) {
             final byte nextByte = sao.bytes[sao.pos++];
-            // Check the delimiter
-            if (prevByte == HttpConstants.LF
-                    && nextByte == delimiter.codePointAt(index)) {
-                index++;
-                if (delimeterLength == index) {
-                    delimiterFound = true;
-                    break;
+            // XXX
+            if(delimiter != null){
+                // Check the delimiter
+                if (prevByte == HttpConstants.LF
+                        && nextByte == delimiter.codePointAt(index)) {
+                    index++;
+                    if (delimeterLength == index) {
+                        delimiterFound = true;
+                        break;
+                    }
+                    continue;
                 }
-                continue;
+            } else {
+                index++;
             }
             lastRealPos = sao.pos;
             if (nextByte == HttpConstants.LF) {
@@ -1534,10 +1579,25 @@ public class MultipartDecoder {
         return arg;
     }
 
+    /**
+     * XXX TODO - Document each state...
+     */
     private static enum MultiPartStatus {
-        NOTSTARTED, PREAMBLE, HEADERDELIMITER, DISPOSITION, FIELD, FILEUPLOAD,
-        MIXEDPREAMBLE, MIXEDDELIMITER, MIXEDDISPOSITION, MIXEDFILEUPLOAD,
-        MIXEDCLOSEDELIMITER, CLOSEDELIMITER, PREEPILOGUE, EPILOGUE
+        NOTSTARTED,
+        PREAMBLE,
+        HEADERDELIMITER,
+        DISPOSITION,
+        FIELD,
+        FILEUPLOAD,
+        MIXEDPREAMBLE,
+        MIXEDDELIMITER,
+        MIXEDDISPOSITION,
+        MIXEDFILEUPLOAD,
+        MIXEDCLOSEDELIMITER,
+        CLOSEDELIMITER,
+        PREEPILOGUE,
+        EPILOGUE,
+        NODELIMITERFOUND
     }
 
     /**

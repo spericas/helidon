@@ -15,6 +15,9 @@
  */
 package io.helidon.webserver;
 
+import java.util.concurrent.CompletionStage;
+import java.util.function.Consumer;
+
 /**
  * An entity that represents a top level multipart payload (i.e all the body parts in the request),
  * or a nested part payload in the case of a multipart-mixed request. Only 1 level of
@@ -22,4 +25,21 @@ package io.helidon.webserver;
  *
  * The number of body parts in the request is not known ahead of time.
  */
-public interface MultiPart extends BodyPart, Iterable<BodyPart> { }
+public interface MultiPart extends BodyPart {
+
+    /**
+     * Register a consumer of body part that is invoked for each body part
+     * available in the request.
+     * @param handler the handler invoked when there is a body part available
+     * for consumption
+     * @return this multipart instance
+     */
+    MultiPart onBodyPart(Consumer<BodyPart> handler);
+
+    /**
+     * Returns a completion stage that is complete when all body parts have been
+     * processed. The stage is failed if an error occurred during processing.
+     * @return the completion stage
+     */
+    CompletionStage<Void> onComplete();
+}

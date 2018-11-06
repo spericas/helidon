@@ -43,13 +43,18 @@ public class Main {
                 .register(new MultiPartSupport())
                 .any("/upload", (req, res) -> {
                     req.content().as(MultiPart.class).thenAccept((multiPart) -> {
-                        multiPart.forEach((bodyPart) -> {
+                        multiPart.onBodyPart((bodyPart) -> {
                             bodyPart.content().as(String.class).thenAccept((str) -> {
                                 System.out.println("File uploaded !");
-                                System.out.println(str);
                             });
+                        }).onComplete().thenRun(() -> {
+                            System.out.println("sending response");
+                            res.send("Files uploaded successfully");
+                        }).exceptionally((Throwable t) -> {
+                            res.status(500);
+                            res.send();
+                            return null;
                         });
-                        res.send("Files uploaded successfully");
                     });
                 })
                 .build();

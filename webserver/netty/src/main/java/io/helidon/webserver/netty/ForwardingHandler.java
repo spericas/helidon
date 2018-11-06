@@ -41,8 +41,6 @@ import io.netty.handler.codec.http.LastHttpContent;
 
 import static io.netty.handler.codec.http.HttpResponseStatus.CONTINUE;
 import static io.netty.handler.codec.http.HttpVersion.HTTP_1_1;
-import io.netty.handler.codec.http.multipart.HttpPostMultipartRequestDecoder;
-import io.netty.handler.codec.http.multipart.InterfaceHttpData;
 
 /**
  * ForwardingHandler bridges Netty response and request related APIs to
@@ -198,7 +196,8 @@ public class ForwardingHandler extends SimpleChannelInboundHandler<Object> {
                 // with the last http request content, the tcp connection has to become 'autoReadable'
                 // so that next http request can be obtained
                 ctx.channel().config().setAutoRead(true);
-            } else if (!content.isReadable()) {
+            } else if ((content!= null && !content.isReadable())
+                    || chunk != null && !chunk.isReadable()) {
                 // this is here to handle the case when the content is not readable but we didn't
                 // exceptionally complete the publisher and close the connection
                 throw new IllegalStateException("It is not expected to not have readable content.");

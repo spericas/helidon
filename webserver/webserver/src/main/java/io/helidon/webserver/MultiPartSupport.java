@@ -16,14 +16,13 @@
 
 package io.helidon.webserver;
 
+import java.util.Objects;
+import java.util.concurrent.CompletionStage;
+import java.util.function.Consumer;
+import java.util.concurrent.CompletableFuture;
+
 import io.helidon.common.http.BodyPartHeaders;
 import io.helidon.common.http.Content;
-import java.util.Iterator;
-import java.util.Objects;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.locks.Lock;
-import java.util.concurrent.locks.ReentrantLock;
-
 import io.helidon.common.http.DataChunk;
 import io.helidon.common.http.MediaType;
 import io.helidon.common.http.MultiPartDataChunk;
@@ -31,7 +30,6 @@ import io.helidon.common.reactive.Flow;
 import io.helidon.common.reactive.Flow.Publisher;
 import io.helidon.common.reactive.Flow.Subscriber;
 import io.helidon.common.reactive.Flow.Subscription;
-import java.util.concurrent.locks.Condition;
 
 /**
  *
@@ -59,19 +57,30 @@ public class MultiPartSupport implements Service, Handler {
         req.next();
     }
 
+    /**
+     * Implementation of {@link MultiPart}.
+     */
     static class MultiPartImpl implements MultiPart {
 
         private final ServerRequest request;
         private final ServerResponse response;
-        private final BodyPartIterator iterator;
+        private final CompletableFuture completeFuture;
+        private final BodyPartProcessor processor;
+        private Consumer<BodyPart> bodyPartConsumer;
+        private BodyPartImpl currentBodyPart;
 
         MultiPartImpl(final ServerRequest request,
                 final ServerResponse response,
-                final Publisher<DataChunk> publisher) {
+                final Publisher<DataChunk> originPublisher) {
 
             this.request = request;
             this.response = response;
-            this.iterator = new BodyPartIterator(publisher, this);
+            this.completeFuture = new CompletableFuture();
+            this.processor = new BodyPartProcessor(this);
+            originPublisher.subscribe(processor);
+            this.currentBodyPart = new BodyPartImpl(this);
+            processor.subscribe(currentBodyPart);
+            this.bodyPartConsumer = null;
         }
 
         @Override
@@ -102,76 +111,49 @@ public class MultiPartSupport implements Service, Handler {
         }
 
         @Override
-        public Iterator<BodyPart> iterator() {
-            return iterator;
-        }
-    }
-
-    /**
-     * A lazy iterator of body part based on a reactive stream of {@link DataChunk}.
-     * The methods {@link #hasNext() } and {@link #next() } will block when
-     * the payload for each body part is being consumed.
-     */
-    static class BodyPartIterator implements Iterator<BodyPart> {
-
-        private final BodyPartProcessor processor;
-        private final MultiPart parent;
-        private final Lock lock;
-        private final Condition condition;
-        private volatile BodyPartImpl currentPart;
-
-        BodyPartIterator(final Publisher<DataChunk> originPublisher,
-                final MultiPart parent) {
-
-            this.parent = parent;
-            this.processor = new BodyPartProcessor();
-            // subscribe the processor to the main stream
-            originPublisher.subscribe(processor);
-            // subscribe the first potential body part to the processor
-            currentPart = new BodyPartImpl(parent, this);
-            processor.subscribe(currentPart);
-            this.lock = new ReentrantLock();
-            this.condition = lock.newCondition();
-        }
-
-        /**
-         * Setup a new body part as the current part and subscribe it
-         * to the processor.
-         */
-        void setNextPart(){
-            currentPart = new BodyPartImpl(parent, this);
-            processor.subscribe(currentPart);
-            condition.signal();
-        }
-
-        /**
-         *  Blocks if a part is being consumed.
-         */
-        void waitNextPart(){
-            try {
-                if (currentPart == null) {
-                    condition.await();
-                }
-            } catch (InterruptedException ex) {
-                ex.printStackTrace();
-            }
+        public MultiPart onBodyPart(final Consumer<BodyPart> handler) {
+            Objects.requireNonNull(handler, "handler is null");
+            this.bodyPartConsumer = handler;
+            return this;
         }
 
         @Override
-        public boolean hasNext() {
-            waitNextPart();
-            return !processor.isComplete();
+        public CompletionStage onComplete() {
+            return completeFuture;
         }
 
-        @Override
-        public BodyPart next() {
-            waitNextPart();
-            if (processor.isComplete()) {
-                return null;
+        /**
+         * Submit the current body for consumption.
+         * @return {@code true} if there is a handler registered to consume
+         *  the body, {@code false} otherwise
+         */
+        boolean fireBodyPartEvent(){
+            if(bodyPartConsumer != null && currentBodyPart != null){
+                bodyPartConsumer.accept(currentBodyPart);
+                return true;
             }
-            BodyPart part = currentPart;
-            currentPart = null;
-            return part;
+            return false;
+        }
+
+        /**
+         * Propagate the given error in the complete future.
+         * @param error the error to propagate
+         */
+        void onError(final Throwable error){
+            completeFuture.completeExceptionally(error);
+        }
+
+        /**
+         * Setup the next body part if there are more body parts to process
+         *  or complete the future.
+         */
+        void onBodyPartComplete(){
+            if(processor.isComplete()){
+                completeFuture.complete(null);
+            } else {
+                currentBodyPart = new BodyPartImpl(this);
+                processor.subscribe(currentBodyPart);
+            }
         }
     }
 
@@ -183,16 +165,15 @@ public class MultiPartSupport implements Service, Handler {
     static class BodyPartImpl implements BodyPart,
             Subscriber<MultiPartDataChunk>, Publisher<DataChunk> {
 
-        private final MultiPart parent;
+        private final MultiPartImpl parent;
         private final Content content;
-        private final BodyPartIterator iterator;
-        private volatile Subscription subscription = null;
-        private volatile Subscriber<? super DataChunk> subscriber = null;
-        private volatile BodyPartHeaders headers = null;
+        private Subscription subscription = null;
+        private Subscriber<? super DataChunk> subscriber = null;
+        private BodyPartHeaders headers = null;
 
-        BodyPartImpl(final MultiPart parent, final BodyPartIterator iterator) {
+        BodyPartImpl(final MultiPartImpl parent) {
+            Objects.requireNonNull(parent, "parent is null");
             this.parent = parent;
-            this.iterator = iterator;
             this.content = new Request.Content(
                     (Request)parent.request(), this);
         }
@@ -228,58 +209,72 @@ public class MultiPartSupport implements Service, Handler {
 
         @Override
         public void onSubscribe(final Subscription s) {
-            Objects.requireNonNull(s, "subscription is null");
-            if(subscription != null){
-                throw new IllegalStateException(
-                        "The subscription is already set!");
+            if(subscription == null){
+                subscription = new BodyPartSubscription(s, parent.processor);
             }
-            subscription = s;
         }
 
         @Override
         public void onNext(final MultiPartDataChunk item) {
-            requireSubscriber();
             if(headers == null){
                 headers = item.headers();
             }
-            subscriber.onNext(item);
+            if(subscriber != null){
+                subscriber.onNext(item);
+            }
         }
 
         @Override
         public void onError(final Throwable throwable) {
-            requireSubscription();
-            subscription.cancel();
+            if(subscriber != null){
+                subscriber.onError(throwable);
+            }
         }
 
         @Override
         public void onComplete() {
-            // release the lock to allow next part iteration
-            iterator.setNextPart();
+            parent.onBodyPartComplete();
+            if(subscriber != null){
+                subscriber.onComplete();
+            }
         }
 
         @Override
         public void subscribe(final Subscriber<? super DataChunk> s) {
-            requireSubscription();
-            if(subscriber != null){
-                if(!subscriber.equals(s)){
-                    throw new IllegalStateException("subscriber is already set");
-                }
-            } else {
+            if(subscriber == null){
                 subscriber = s;
                 subscriber.onSubscribe(subscription);
             }
         }
+    }
 
-        private void requireSubscription(){
-            if(subscription == null){
-                throw new IllegalStateException("The subscription is not set!");
+    /**
+     * A delegated subscription used to send the cached first chunk when
+     * the content subscriber has requested data.
+     */
+    static class BodyPartSubscription implements Subscription {
+
+        private final Subscription delegate;
+        private final BodyPartProcessor processor;
+
+        BodyPartSubscription(final Subscription delegate,
+                final BodyPartProcessor processor) {
+
+            this.delegate = delegate;
+            this.processor = processor;
+        }
+
+        @Override
+        public void request(long n) {
+            if(n > 0){
+                processor.submitFirstChunk();
+                delegate.request(n);
             }
         }
 
-        private void requireSubscriber() {
-            if(subscriber == null){
-                throw new IllegalStateException("The subscriber is not set");
-            }
+        @Override
+        public void cancel() {
+            delegate.cancel();
         }
     }
 
@@ -287,62 +282,84 @@ public class MultiPartSupport implements Service, Handler {
      * A delegated processor that converts a reactive stream of {@link DataChunk}
      *  into a stream of {@link MultiPartDataChunk}.
      *
-     * The processor releases each data chunk after successfully consumed.
-     * It exposes a method {@link #isComplete()} that is used by
+     * The processor exposes a method {@link #isComplete()} that is used by
      *  {@link BodyPartIterator} to check if there are more parts available.
      */
     static class BodyPartProcessor implements Subscriber<DataChunk>,
             Publisher<MultiPartDataChunk> {
 
-        private volatile boolean complete = false;
-        private volatile Subscriber<? super MultiPartDataChunk> subscriber = null;
-        private volatile Subscription subscription = null;
+        private boolean complete = false;
+        private Subscriber<? super MultiPartDataChunk> subscriber = null;
+        private Subscription subscription = null;
+        private final MultiPartImpl parent;
+        private MultiPartDataChunk firstChunk = null;
+
+        /**
+         * Create a new processor.
+         * @param parent the parent multipart entity
+         */
+        BodyPartProcessor(final MultiPartImpl parent) {
+            Objects.requireNonNull(parent, "parent is null");
+            this.parent = parent;
+        }
 
         /**
          * Indicate if there are no more chunks available in the stream.
          * @return {@code true} if there are no more chunks available,
          *  {@code false} otherwise.
          */
-        boolean isComplete(){
+        boolean isComplete() {
             return complete;
         }
 
         @Override
         public void onSubscribe(final Flow.Subscription s) {
-            if(subscription != null){
-                throw new IllegalStateException(
-                        "The subscription is already set!");
+            if(subscription == null){
+                subscription = s;
+                // get the first item
+                subscription.request(1);
             }
-            subscription = s;
         }
 
         @Override
         public void onNext(final DataChunk item) {
-            requireSubscriber();
-            try {
-                if (item instanceof MultiPartDataChunk) {
-                    MultiPartDataChunk chunk = (MultiPartDataChunk) item;
-                    subscriber.onNext(chunk);
-                    if (chunk.isLast()) {
-                        subscriber.onComplete();
-                    }
+            if (item instanceof MultiPartDataChunk) {
+                MultiPartDataChunk chunk = (MultiPartDataChunk) item;
+                if(firstChunk == null){
+                    firstChunk = chunk;
+                    parent.fireBodyPartEvent();
                 } else {
-                    onError(new IllegalArgumentException(
-                            "Not a multipart chunk!"));
+                    submitChunk(chunk);
                 }
-            } catch(Throwable throwable){
-                onError(throwable);
-            } finally {
-                // blame netbeans for the if statement
-                if(item != null){
-                    item.release();
+            } else {
+                onError(new IllegalArgumentException("Not a multipart chunk!"));
+            }
+        }
+
+        void submitFirstChunk(){
+            if(firstChunk == null){
+                throw new IllegalStateException("First chunk is null");
+            }
+            if(subscriber == null){
+                throw new IllegalStateException("Subscriber is null");
+            }
+            submitChunk(firstChunk);
+        }
+
+        private void submitChunk(MultiPartDataChunk chunk) {
+            if (subscriber != null) {
+                subscriber.onNext(chunk);
+                if (chunk.isLast()) {
+                    Subscriber s = subscriber;
+                    subscriber = null;
+                    firstChunk = null;
+                    s.onComplete();
                 }
             }
         }
 
         @Override
         public void onError(final Throwable throwable) {
-            requireSubscriber();
             if (subscriber != null) {
                 subscriber.onError(throwable);
             }
@@ -352,32 +369,17 @@ public class MultiPartSupport implements Service, Handler {
         public void onComplete() {
             if (!complete) {
                 complete = true;
+                parent.onBodyPartComplete();
             }
         }
 
         @Override
         public void subscribe(final Subscriber<? super MultiPartDataChunk> s) {
-            requireSubscription();
-            if(subscriber != null){
-                if(!subscriber.equals(s)){
-                    throw new IllegalStateException("subscriber is already set");
-                }
-            } else {
-                subscriber = s;
-                subscriber.onSubscribe(subscription);
+            if (firstChunk != null) {
+                throw new IllegalStateException("current part already subscribed");
             }
-        }
-
-        private void requireSubscription(){
-            if(subscription == null){
-                throw new IllegalStateException("The subscription is not set!");
-            }
-        }
-
-        private void requireSubscriber() {
-            if(subscriber == null){
-                throw new IllegalStateException("The subscriber is not set");
-            }
+            subscriber = s;
+            subscriber.onSubscribe(subscription);
         }
     }
 }
