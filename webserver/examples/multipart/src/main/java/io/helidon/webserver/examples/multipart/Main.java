@@ -44,6 +44,7 @@ public class Main {
                 .any("/upload", (req, res) -> {
                     req.content().as(MultiPart.class).thenAccept((multiPart) -> {
                         multiPart.onBodyPart((bodyPart) -> {
+                            System.out.println("onBodyPart: " + bodyPart);
                             bodyPart.content().as(String.class).thenAccept((str) -> {
                                 System.out.println("File uploaded !");
                             });

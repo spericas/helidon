@@ -1,8 +1,3 @@
-/*
- * To change this license header, choose License Headers in Project Properties.
- * To change this template file, choose Tools | Templates
- * and open the template in the editor.
- */
 package io.helidon.webserver.netty;
 
 /*
@@ -33,20 +28,29 @@ import io.netty.util.CharsetUtil;
 import io.netty.util.internal.InternalThreadLocalMap;
 import io.netty.util.internal.StringUtil;
 
+import java.io.Serializable;
 import java.io.IOException;
 import java.nio.charset.Charset;
 import java.nio.charset.UnsupportedCharsetException;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
 
-import static io.netty.buffer.Unpooled.*;
-import io.netty.handler.codec.DecoderException;
+import io.netty.handler.codec.http.multipart.Attribute;
+import io.netty.handler.codec.http.multipart.FileUpload;
+import io.netty.handler.codec.http.multipart.HttpData;
 import io.netty.handler.codec.http.multipart.HttpPostRequestDecoder;
+import io.netty.handler.codec.http.multipart.HttpPostRequestDecoder.EndOfDataDecoderException;
+import io.netty.handler.codec.http.multipart.HttpPostRequestDecoder.ErrorDataDecoderException;
+import io.netty.handler.codec.http.multipart.HttpPostRequestDecoder.NotEnoughDataDecoderException;
+import io.netty.handler.codec.http.multipart.InterfaceHttpData;
+import io.netty.handler.codec.http.multipart.MemoryAttribute;
+import io.netty.handler.codec.http.multipart.MemoryFileUpload;
+
+import static io.netty.buffer.Unpooled.*;
 import static io.netty.util.internal.ObjectUtil.*;
-import java.io.Serializable;
-import java.util.Comparator;
 
 /**
  * This decoder will decode Body and can handle POST BODY.
@@ -78,13 +82,15 @@ public class HttpPostMultipartRequestDecoder {
 
     /**
      * HttpDatas from Body
+     * XXX made non final
      */
-    private final List<InterfaceHttpData> bodyListHttpData = new ArrayList<InterfaceHttpData>();
+    private List<InterfaceHttpData> bodyListHttpData = new ArrayList<InterfaceHttpData>();
 
     /**
      * HttpDatas as Map from Body
+     * XXX made non final
      */
-    private final Map<String, List<InterfaceHttpData>> bodyMapHttpData = new TreeMap<String, List<InterfaceHttpData>>(
+    private Map<String, List<InterfaceHttpData>> bodyMapHttpData = new TreeMap<String, List<InterfaceHttpData>>(
             CaseIgnoringComparator.INSTANCE);
 
     /**
@@ -129,90 +135,6 @@ public class HttpPostMultipartRequestDecoder {
     private Attribute currentAttribute;
 
     private boolean destroyed;
-
-/**
-     * Multipart attribute.
-     */
-    public static class Attribute implements HttpData {
-
-        private final String name;
-        private long size;
-        private final Charset charset;
-        private String value;
-        private ByteBuf buf = buffer(64);
-        private boolean completed = false;
-
-        public Attribute(final String name, final long size, final Charset charset) {
-            this.name = name;
-            this.size = size;
-            this.charset = charset;
-        }
-
-        public Attribute(String name, String value) {
-            this.name = name;
-            this.value = value;
-            this.size = value.getBytes().length;
-            this.charset = null;
-        }
-
-        public String getValue() {
-            return value;
-        }
-
-        @Override
-        public String getName() {
-            return name;
-        }
-
-        private void setValue(byte[] array) {
-            Charset c = this.charset == null ? Charset.defaultCharset() : this.charset;
-            this.value = new String(array, c);
-            if (this.size == 0) {
-                this.size = array.length;
-            }
-        }
-
-        @Override
-        public boolean release() {
-            return true;
-        }
-
-        @Override
-        public void addContent(ByteBuf buffer, boolean last) throws IOException {
-            buf.writeBytes(buffer);
-            completed = last;
-        }
-
-        @Override
-        public boolean isCompleted() {
-            return completed;
-        }
-
-        @Override
-        public long length() {
-            throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
-        }
-
-        @Override
-        public long definedLength() {
-            throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
-        }
-
-        @Override
-        public ByteBuf getByteBuf() throws IOException {
-            return buf;
-        }
-
-        @Override
-        public String getString() throws IOException {
-            return buf.toString(Charset.defaultCharset());
-        }
-
-        @Override
-        public String getString(Charset encoding) throws IOException {
-            return buf.toString(encoding);
-        }
-    }
 
     /**
      * states follow NOTSTARTED PREAMBLE ( (HEADERDELIMITER DISPOSITION (FIELD |
@@ -426,6 +348,22 @@ public class HttpPostMultipartRequestDecoder {
         return null;
     }
 
+    /**
+     * XXX get all http datas and reset.
+     * @return
+     */
+    public Map<String, List<InterfaceHttpData>> getHttpData(){
+        Map<String, List<InterfaceHttpData>> map = bodyMapHttpData;
+        bodyMapHttpData = new TreeMap<String, List<InterfaceHttpData>>(
+                CaseIgnoringComparator.INSTANCE);
+        bodyListHttpData = new ArrayList<>();
+        undecodedChunk = null;
+        currentAttribute = null;
+        currentFileUpload = null;
+        currentAttribute = null;
+        return map;
+    }
+
     public InterfaceHttpData currentPartialHttpData() {
         if (currentFileUpload != null) {
             return currentFileUpload;
@@ -536,6 +474,8 @@ public class HttpPostMultipartRequestDecoder {
             if (charsetAttribute != null) {
                 try {
                     localCharset = Charset.forName(charsetAttribute.getValue());
+                } catch (IOException e) {
+                    throw new ErrorDataDecoderException(e);
                 } catch (UnsupportedCharsetException e) {
                     throw new ErrorDataDecoderException(e);
                 }
@@ -548,32 +488,37 @@ public class HttpPostMultipartRequestDecoder {
                 try {
                     size = lengthAttribute != null? Long.parseLong(lengthAttribute
                             .getValue()) : 0L;
+                } catch (IOException e) {
+                    throw new ErrorDataDecoderException(e);
                 } catch (NumberFormatException ignored) {
                     size = 0;
                 }
                 try {
                     if (size > 0) {
-                        currentAttribute = new Attribute(
+                        currentAttribute = new MemoryAttribute(
                             cleanString(nameAttribute.getValue()), size,
                             localCharset);
-                        // XXX
-//                    } else {
-//                        currentAttribute = new Attribute(request,
-//                                cleanString(nameAttribute.getValue()));
+                    } else {
+                        currentAttribute = new MemoryAttribute(/* XXX request, */
+                                cleanString(nameAttribute.getValue()));
                     }
                 } catch (NullPointerException e) {
                     throw new ErrorDataDecoderException(e);
                 } catch (IllegalArgumentException e) {
                     throw new ErrorDataDecoderException(e);
+                } catch (IOException e) {
+                    throw new ErrorDataDecoderException(e);
                 }
-//                if (localCharset != null) {
-//                    currentAttribute.setCharset(localCharset);
-//                }
+                if (localCharset != null) {
+                    currentAttribute.setCharset(localCharset);
+                }
             }
             // load data
             if (!loadDataMultipart(undecodedChunk, multipartDataBoundary, currentAttribute)) {
                 // Delimiter is not found. Need more chunks.
-                // TODO decode partial
+                // XXX was return null
+                // returning incomplete attribute
+//                return currentAttribute;
                 return null;
             }
             Attribute finalAttribute = currentAttribute;
@@ -744,9 +689,11 @@ public class HttpPostMultipartRequestDecoder {
             } else if (HttpHeaderNames.CONTENT_TRANSFER_ENCODING.contentEqualsIgnoreCase(contents[0])) {
                 Attribute attribute;
                 try {
-                    attribute = new Attribute(HttpHeaderNames.CONTENT_TRANSFER_ENCODING.toString(),
+                    attribute = new MemoryAttribute(HttpHeaderNames.CONTENT_TRANSFER_ENCODING.toString(),
                             cleanString(contents[1]));
                 } catch (NullPointerException e) {
+                    throw new ErrorDataDecoderException(e);
+                } catch (IOException e) {
                     throw new ErrorDataDecoderException(e);
                 } catch (IllegalArgumentException e) {
                     throw new ErrorDataDecoderException(e);
@@ -756,11 +703,11 @@ public class HttpPostMultipartRequestDecoder {
             } else if (HttpHeaderNames.CONTENT_LENGTH.contentEqualsIgnoreCase(contents[0])) {
                 Attribute attribute;
                 try {
-                    attribute = new Attribute(HttpHeaderNames.CONTENT_LENGTH.toString(),
+                    attribute = new MemoryAttribute(HttpHeaderNames.CONTENT_LENGTH.toString(),
                             cleanString(contents[1]));
                 } catch (NullPointerException e) {
                     throw new ErrorDataDecoderException(e);
-                } catch (IllegalArgumentException e) {
+                } catch (IOException | IllegalArgumentException e) {
                     throw new ErrorDataDecoderException(e);
                 }
 
@@ -783,21 +730,21 @@ public class HttpPostMultipartRequestDecoder {
                             String values = StringUtil.substringAfter(contents[i], '=');
                             Attribute attribute;
                             try {
-                                attribute = new Attribute(charsetHeader, cleanString(values));
+                                attribute = new MemoryAttribute(charsetHeader, cleanString(values));
                             } catch (NullPointerException e) {
                                 throw new ErrorDataDecoderException(e);
-                            } catch (IllegalArgumentException e) {
+                            } catch (IOException | IllegalArgumentException e) {
                                 throw new ErrorDataDecoderException(e);
                             }
                             currentFieldAttributes.put(HttpHeaderValues.CHARSET, attribute);
                         } else {
                             Attribute attribute;
                             try {
-                                attribute = new Attribute(
+                                attribute = new MemoryAttribute(
                                         cleanString(contents[0]), contents[i]);
                             } catch (NullPointerException e) {
                                 throw new ErrorDataDecoderException(e);
-                            } catch (IllegalArgumentException e) {
+                            } catch (IOException | IllegalArgumentException e) {
                                 throw new ErrorDataDecoderException(e);
                             }
                             currentFieldAttributes.put(attribute.getName(), attribute);
@@ -864,7 +811,11 @@ public class HttpPostMultipartRequestDecoder {
             // otherwise we need to clean the value
             value = cleanString(value);
         }
-        return new Attribute(name, value);
+        try {
+            return new MemoryAttribute(name, value);
+        } catch(IOException e) {
+            throw new ErrorDataDecoderException(e);
+        }
     }
 
     /**
@@ -884,11 +835,11 @@ public class HttpPostMultipartRequestDecoder {
         TransferEncodingMechanism mechanism = TransferEncodingMechanism.BIT7;
         if (encoding != null) {
             String code;
-//            try {
+            try {
                 code = encoding.getValue().toLowerCase();
-//            } catch (IOException e) {
-//                throw new ErrorDataDecoderException(e);
-//            }
+            } catch (IOException e) {
+                throw new ErrorDataDecoderException(e);
+            }
             if (code.equals(TransferEncodingMechanism.BIT7.value())) {
                 localCharset = CharsetUtil.US_ASCII;
             } else if (code.equals(TransferEncodingMechanism.BIT8.value())) {
@@ -905,8 +856,8 @@ public class HttpPostMultipartRequestDecoder {
         if (charsetAttribute != null) {
             try {
                 localCharset = Charset.forName(charsetAttribute.getValue());
-//            } catch (IOException e) {
-//                throw new ErrorDataDecoderException(e);
+            } catch (IOException e) {
+                throw new ErrorDataDecoderException(e);
             } catch (UnsupportedCharsetException e) {
                 throw new ErrorDataDecoderException(e);
             }
@@ -919,8 +870,8 @@ public class HttpPostMultipartRequestDecoder {
             long size;
             try {
                 size = lengthAttribute != null ? Long.parseLong(lengthAttribute.getValue()) : 0L;
-//            } catch (IOException e) {
-//                throw new ErrorDataDecoderException(e);
+            } catch (IOException e) {
+                throw new ErrorDataDecoderException(e);
             } catch (NumberFormatException ignored) {
                 size = 0;
             }
@@ -931,7 +882,7 @@ public class HttpPostMultipartRequestDecoder {
                 } else {
                     contentType = DEFAULT_BINARY_CONTENT_TYPE;
                 }
-                currentFileUpload = new FileUploadImpl(
+                currentFileUpload = new MemoryFileUpload(
                         cleanString(nameAttribute.getValue()), cleanString(filenameAttribute.getValue()),
                         contentType, mechanism.value(), localCharset,
                         size);
@@ -939,15 +890,17 @@ public class HttpPostMultipartRequestDecoder {
                 throw new ErrorDataDecoderException(e);
             } catch (IllegalArgumentException e) {
                 throw new ErrorDataDecoderException(e);
-//            } catch (IOException e) {
-//                throw new ErrorDataDecoderException(e);
+            } catch (IOException e) {
+                throw new ErrorDataDecoderException(e);
             }
         }
         // load data as much as possible
         if (!loadDataMultipart(undecodedChunk, delimiter, currentFileUpload)) {
             // Delimiter is not found. Need more chunks.
-            // TODO return partial
+            // XXX was return null
+            // returning incomplete fileupload
             return null;
+//            return currentFileUpload;
         }
         if (currentFileUpload.isCompleted()) {
             // ready to load the next one
@@ -1538,58 +1491,6 @@ public class HttpPostMultipartRequestDecoder {
     }
 
     /**
-     * Exception when try reading data from request in chunked format, and not
-     * enough data are available (need more chunks)
-     */
-    public static class NotEnoughDataDecoderException extends DecoderException {
-        private static final long serialVersionUID = -7846841864603865638L;
-
-        public NotEnoughDataDecoderException() {
-        }
-
-        public NotEnoughDataDecoderException(String msg) {
-            super(msg);
-        }
-
-        public NotEnoughDataDecoderException(Throwable cause) {
-            super(cause);
-        }
-
-        public NotEnoughDataDecoderException(String msg, Throwable cause) {
-            super(msg, cause);
-        }
-    }
-
-    /**
-     * Exception when the body is fully decoded, even if there is still data
-     */
-    public static class EndOfDataDecoderException extends DecoderException {
-        private static final long serialVersionUID = 1336267941020800769L;
-    }
-
-    /**
-     * Exception when an error occurs while decoding
-     */
-    public static class ErrorDataDecoderException extends DecoderException {
-        private static final long serialVersionUID = 5020247425493164465L;
-
-        public ErrorDataDecoderException() {
-        }
-
-        public ErrorDataDecoderException(String msg) {
-            super(msg);
-        }
-
-        public ErrorDataDecoderException(Throwable cause) {
-            super(cause);
-        }
-
-        public ErrorDataDecoderException(String msg, Throwable cause) {
-            super(msg, cause);
-        }
-    }
-
-    /**
      * A {@link CharSequence} case insensitive comparator.
      */
     private static class CaseIgnoringComparator
@@ -1746,199 +1647,7 @@ public class HttpPostMultipartRequestDecoder {
         return result;
     }
 
-    private static interface InterfaceHttpData {
-
-        /**
-         * Returns the name of this InterfaceHttpData.
-         */
-        String getName();
-
-        /**
-         * Decreases the reference count by {@code 1} and deallocates this object if the reference count reaches at
-         * {@code 0}.
-         *
-         * @return {@code true} if and only if the reference count became {@code 0} and this object has been deallocated
-         */
-        boolean release();
-    }
-
-    private static interface HttpData extends InterfaceHttpData {
-
-        /**
-         * Add the content from the ChannelBuffer
-         *
-         * @param buffer
-         *            must be not null except if last is set to False
-         * @param last
-         *            True of the buffer is the last one
-         * @throws IOException
-         */
-        void addContent(ByteBuf buffer, boolean last) throws IOException;
-
-        /**
-         *
-         * @return True if the InterfaceHttpData is completed (all data are stored)
-         */
-        boolean isCompleted();
-
-        /**
-         * Returns the size in byte of the InterfaceHttpData
-         *
-         * @return the size of the InterfaceHttpData
-         */
-        long length();
-
-        /**
-         * Returns the defined length of the HttpData.
-         *
-         * If no Content-Length is provided in the request, the defined length is
-         * always 0 (whatever during decoding or in final state).
-         *
-         * If Content-Length is provided in the request, this is this given defined length.
-         * This value does not change, whatever during decoding or in the final state.
-         *
-         * This method could be used for instance to know the amount of bytes transmitted for
-         * one particular HttpData, for example one {@link FileUpload} or any known big {@link Attribute}.
-         *
-         * @return the defined length of the HttpData
-         */
-        long definedLength();
-
-        /**
-         * Returns the content of the file item as a ByteBuf
-         *
-         * @return the content of the file item as a ByteBuf
-         * @throws IOException
-         */
-        ByteBuf getByteBuf() throws IOException;
-
-        /**
-         * Returns the contents of the file item as a String, using the default
-         * character encoding.
-         *
-         * @return the contents of the file item as a String, using the default
-         *         character encoding.
-         * @throws IOException
-         */
-        String getString() throws IOException;
-
-        /**
-         * Returns the contents of the file item as a String, using the specified
-         * charset.
-         *
-         * @param encoding
-         *            the charset to use
-         * @return the contents of the file item as a String, using the specified
-         *         charset.
-         * @throws IOException
-         */
-        String getString(Charset encoding) throws IOException;
-    }
-
-    private static interface FileUpload extends HttpData {
-        /**
-         * Returns the original filename in the client's filesystem,
-         * as provided by the browser (or other client software).
-         * @return the original filename
-         */
-        String getFilename();
-
-        /**
-         * Returns the content type passed by the browser or null if not defined.
-         * @return the content type passed by the browser or null if not defined.
-         */
-        String getContentType();
-
-        /**
-         * Returns the Content-Transfer-Encoding
-         * @return the Content-Transfer-Encoding
-         */
-        String getContentTransferEncoding();
-    }
-
-    private static class FileUploadImpl implements FileUpload {
-
-        private final String name;
-        private final String fileName;
-        private final String contentType;
-        private final String contentTransfertEncoding;
-        private ByteBuf buf;
-        private boolean completed = false;
-        private long size;
-        private final Charset charset;
-
-        public FileUploadImpl(String name, String fileName, String contentType, String contentTransfertEncoding, Charset charset, long size) {
-            this.name = name;
-            this.fileName = fileName;
-            this.contentType = contentType;
-            this.contentTransfertEncoding = contentTransfertEncoding;
-            this.charset = charset;
-            this.size = size;
-            this.buf = null; //XXX FIXME
-        }
-
-        @Override
-        public String getFilename() {
-            return fileName;
-        }
-
-        @Override
-        public String getContentType() {
-            return contentType;
-        }
-
-        @Override
-        public String getContentTransferEncoding() {
-            return contentTransfertEncoding;
-        }
-
-        @Override
-        public String getName() {
-            return name;
-        }
-
-        @Override
-        public boolean release() {
-            return buf.release();
-        }
-
-        @Override
-        public void addContent(ByteBuf buffer, boolean last) throws IOException {
-            throw new UnsupportedOperationException("Not supported yet.");
-        }
-
-        @Override
-        public boolean isCompleted() {
-            return completed;
-        }
-
-        @Override
-        public long length() {
-            return size;
-        }
-
-        @Override
-        public long definedLength() {
-            throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
-        }
-
-        @Override
-        public ByteBuf getByteBuf() throws IOException {
-            return buf;
-        }
-
-        @Override
-        public String getString() throws IOException {
-            return buf.toString(Charset.defaultCharset());
-        }
-
-        @Override
-        public String getString(Charset encoding) throws IOException {
-            return buf.toString(encoding);
-        }
-    }
-
-/**
+    /**
      * Split the very first line (Content-Type value) in 3 Strings
      *
      * @return the array of 3 Strings

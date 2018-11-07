@@ -16,6 +16,7 @@
 
 package io.helidon.webserver.netty;
 
+import io.helidon.common.http.BodyPartHeaders;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -26,9 +27,13 @@ import java.util.logging.Logger;
 
 import io.helidon.common.http.DataChunk;
 import io.helidon.common.reactive.Flow;
-import io.helidon.webserver.netty.MultipartDecoder.MixedMultipartChunk;
 
 import io.netty.buffer.ByteBuf;
+import io.netty.handler.codec.http.multipart.FileUpload;
+import io.netty.handler.codec.http.multipart.InterfaceHttpData;
+import java.util.List;
+import java.util.Map;
+import java.util.Map.Entry;
 
 /**
  * The OriginThreadPublisher's nature is to always run {@link io.helidon.common.reactive.Flow.Subscriber#onNext(Object)}
@@ -156,8 +161,11 @@ class OriginThreadPublisher implements Flow.Publisher<DataChunk> {
 
                 @Override
                 public void cancel() {
-                    hookOnCancel();
+                    // XX commenting hookOnCancel to make this publisher
+                    // 'resumable'
+                    // hookOnCancel();
                     singleSubscriber = null;
+                    hasSingleSubscriber.set(false);
                 }
             });
         } finally {
@@ -211,11 +219,31 @@ class OriginThreadPublisher implements Flow.Publisher<DataChunk> {
         }
     }
 
-    void submit(final MixedMultipartChunk chunk) {
+    void submit(Map<String, List<InterfaceHttpData>> multiPartHttpDataMap) {
         try {
             reentrantLock.lock();
-            submit(new ByteBufMultiPartRequestChunk(chunk.buf(),
-                    chunk.headers(), chunk.isLast(), referenceQueue));
+            for (Entry<String, List<InterfaceHttpData>> entry : multiPartHttpDataMap.entrySet()) {
+                BodyPartHeaders headers = null;
+                for (InterfaceHttpData data : entry.getValue()) {
+                    if (data instanceof FileUpload) {
+                        if (headers == null) {
+                            headers = new ReadOnlyBodyPartHeaders(
+                                    ((FileUpload) data).getName(),
+                                    ((FileUpload) data).getFilename(),
+                                    ((FileUpload) data).getContentType(),
+                                    ((FileUpload) data).getContentTransferEncoding(),
+                                    ((FileUpload) data).getCharset(),
+                                    ((FileUpload) data).definedLength());
+                        }
+                        final ByteBufMultiPartRequestChunk chunk = new ByteBufMultiPartRequestChunk(
+                                ((FileUpload) data).content(),
+                                headers,
+                                ((FileUpload) data).isCompleted(),
+                                referenceQueue);
+                        submit(chunk);
+                    }
+                }
+            }
         } catch (RuntimeException e) {
             if (singleSubscriber == null) {
                 t = e;

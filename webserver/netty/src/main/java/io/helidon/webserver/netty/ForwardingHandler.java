@@ -24,7 +24,6 @@ import javax.net.ssl.SSLEngine;
 
 import io.helidon.webserver.BadRequestException;
 import io.helidon.webserver.Routing;
-import io.helidon.webserver.netty.MultipartDecoder.MixedMultipartChunk;
 import io.helidon.webserver.spi.BareRequest;
 import io.helidon.webserver.spi.BareResponse;
 
@@ -61,7 +60,7 @@ public class ForwardingHandler extends SimpleChannelInboundHandler<Object> {
     // this field is always accessed by the very same thread; as such, it doesn't need to be
     // concurrency aware
     private RequestContext requestContext;
-    private MultipartDecoder multipartDecoder;
+    private HttpPostMultipartRequestDecoder multipartDecoder;
 
     ForwardingHandler(Routing routing,
                       NettyWebServer webServer,
@@ -99,8 +98,8 @@ public class ForwardingHandler extends SimpleChannelInboundHandler<Object> {
             HttpRequest request = (HttpRequest) msg;
 
             // XXX MULTIPART
-            if(MultipartDecoder.isMultipart(request)){
-                multipartDecoder = new MultipartDecoder(request);
+            if(HttpPostMultipartRequestDecoder.isMultipart(request)){
+                multipartDecoder = new HttpPostMultipartRequestDecoder(request);
             }
 
             ReferenceHoldingQueue<ByteBufRequestChunk> queue = new ReferenceHoldingQueue<>();
@@ -145,17 +144,13 @@ public class ForwardingHandler extends SimpleChannelInboundHandler<Object> {
             }
 
             HttpContent httpContent = (HttpContent) msg;
-            boolean readable;
-            MixedMultipartChunk chunk;
+            boolean readable = httpContent.content().isReadable();
             ByteBuf content;
             if(multipartDecoder != null){
-                chunk = multipartDecoder.decode(httpContent);
-                readable = chunk.isReadable();
+                multipartDecoder.offer(httpContent);
                 content = null;
             } else {
-                chunk = null;
                 content = httpContent.content();
-                readable = content.isReadable();
             }
 
             if (readable) {
@@ -178,7 +173,7 @@ public class ForwardingHandler extends SimpleChannelInboundHandler<Object> {
                     if(content != null){
                         requestContext.publisher().submit(content);
                     } else {
-                        requestContext.publisher().submit(chunk);
+                        requestContext.publisher().submit(multipartDecoder.getHttpData());
                     }
                 }
             }
@@ -196,8 +191,7 @@ public class ForwardingHandler extends SimpleChannelInboundHandler<Object> {
                 // with the last http request content, the tcp connection has to become 'autoReadable'
                 // so that next http request can be obtained
                 ctx.channel().config().setAutoRead(true);
-            } else if ((content!= null && !content.isReadable())
-                    || chunk != null && !chunk.isReadable()) {
+            } else if (!readable) {
                 // this is here to handle the case when the content is not readable but we didn't
                 // exceptionally complete the publisher and close the connection
                 throw new IllegalStateException("It is not expected to not have readable content.");
