@@ -46,7 +46,7 @@ public class Main {
                         multiPart.onBodyPart((bodyPart) -> {
                             System.out.println("onBodyPart: " + bodyPart);
                             bodyPart.content().as(String.class).thenAccept((str) -> {
-                                System.out.println("File uploaded !");
+                                System.out.println("File uploaded: " + bodyPart.headers().filename());
                             });
                         }).onComplete().thenRun(() -> {
                             System.out.println("sending response");

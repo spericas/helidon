@@ -166,6 +166,7 @@ class OriginThreadPublisher implements Flow.Publisher<DataChunk> {
                     // hookOnCancel();
                     singleSubscriber = null;
                     hasSingleSubscriber.set(false);
+                    reqCount = 0;
                 }
             });
         } finally {
@@ -223,18 +224,15 @@ class OriginThreadPublisher implements Flow.Publisher<DataChunk> {
         try {
             reentrantLock.lock();
             for (Entry<String, List<InterfaceHttpData>> entry : multiPartHttpDataMap.entrySet()) {
-                BodyPartHeaders headers = null;
                 for (InterfaceHttpData data : entry.getValue()) {
                     if (data instanceof FileUpload) {
-                        if (headers == null) {
-                            headers = new ReadOnlyBodyPartHeaders(
+                        BodyPartHeaders headers = new ReadOnlyBodyPartHeaders(
                                     ((FileUpload) data).getName(),
                                     ((FileUpload) data).getFilename(),
                                     ((FileUpload) data).getContentType(),
                                     ((FileUpload) data).getContentTransferEncoding(),
                                     ((FileUpload) data).getCharset(),
                                     ((FileUpload) data).definedLength());
-                        }
                         final ByteBufMultiPartRequestChunk chunk = new ByteBufMultiPartRequestChunk(
                                 ((FileUpload) data).content(),
                                 headers,
