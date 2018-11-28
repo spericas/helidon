@@ -24,6 +24,7 @@ import java.util.logging.Logger;
 import io.helidon.common.http.DataChunk;
 
 import io.netty.buffer.ByteBuf;
+import java.util.logging.Level;
 
 /**
  * The ByteBufRequestChunk.
@@ -88,14 +89,14 @@ class ByteBufRequestChunk implements DataChunk {
 
         static {
             // TODO add a link to a website that explains the problem
-            LOGGER.warning("LEAK: RequestChunk.release() was not called before it was garbage collected. "
-                                   + "While the Reactive WebServer is "
-                                   + "designed to automatically release all the RequestChunks, it still "
-                                   + "comes with a considerable performance penalty and a demand for a large "
-                                   + "memory space (depending on expected throughput, it might require even more than 2GB). "
-                                   + "As such the users are "
-                                   + "strongly advised to release all the RequestChunk instances "
-                                   + "explicitly when they're not needed.");
+            LOGGER.log(Level.WARNING,
+                    "LEAK: {0}.release() was not called before it was garbage collected."
+                    + " While the Reactive WebServer is designed to automatically release all the RequestChunks,"
+                    + " it still comes with a considerable performance penalty and a demand for a large memory space"
+                    + " (depending on expected throughput, it might require even more than 2GB)."
+                    + " As such the users are strongly advised to release all the {0} instances explicitly"
+                    + " when they''re not needed.",
+                    new Object[]{ByteBufRequestChunk.class.getSimpleName()});
         }
 
         static void logOnce() {

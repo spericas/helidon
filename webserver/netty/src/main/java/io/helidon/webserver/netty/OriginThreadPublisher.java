@@ -16,6 +16,7 @@
 
 package io.helidon.webserver.netty;
 
+import io.helidon.common.http.BodyPartHeaders;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -28,6 +29,11 @@ import io.helidon.common.http.DataChunk;
 import io.helidon.common.reactive.Flow;
 
 import io.netty.buffer.ByteBuf;
+import io.netty.handler.codec.http.multipart.FileUpload;
+import io.netty.handler.codec.http.multipart.InterfaceHttpData;
+import java.util.List;
+import java.util.Map;
+import java.util.Map.Entry;
 
 /**
  * The OriginThreadPublisher's nature is to always run {@link io.helidon.common.reactive.Flow.Subscriber#onNext(Object)}
@@ -58,7 +64,7 @@ class OriginThreadPublisher implements Flow.Publisher<DataChunk> {
     private final BlockingQueue<ByteBufRequestChunk> queue = new ArrayBlockingQueue<>(256);
     private final ReferenceHoldingQueue<ByteBufRequestChunk> referenceQueue;
 
-    private AtomicLong nextCount = new AtomicLong();
+    private final AtomicLong nextCount = new AtomicLong();
     private volatile long reqCount = 0;
 
     /**
@@ -155,8 +161,12 @@ class OriginThreadPublisher implements Flow.Publisher<DataChunk> {
 
                 @Override
                 public void cancel() {
-                    hookOnCancel();
+                    // XX commenting hookOnCancel to make this publisher
+                    // 'resumable'
+                    // hookOnCancel();
                     singleSubscriber = null;
+                    hasSingleSubscriber.set(false);
+                    reqCount = 0;
                 }
             });
         } finally {
@@ -197,26 +207,7 @@ class OriginThreadPublisher implements Flow.Publisher<DataChunk> {
     void submit(ByteBuf data) {
         try {
             reentrantLock.lock();
-
-            ByteBufRequestChunk chunk = new ByteBufRequestChunk(data, referenceQueue);
-
-            if (!queue.offer(chunk)) {
-                LOGGER.severe("Unable to add an element to the publisher cache.");
-                error(new IllegalStateException("Unable to add an element to the publisher cache."));
-                return;
-            }
-
-            if (nextCount.get() < reqCount) {
-                nextCount.incrementAndGet();
-                // the poll is never expected to return null
-                ByteBufRequestChunk item = queue.poll();
-
-                LOGGER.finest(() -> "Publishing request chunk: " + (null == item ? "null" : item.id()));
-                singleSubscriber.onNext(item);
-            } else {
-                LOGGER.finest(() -> "Not publishing due to low request count: " + nextCount + " <= " + reqCount);
-            }
-
+            submit(new ByteBufRequestChunk(data, referenceQueue));
         } catch (RuntimeException e) {
             if (singleSubscriber == null) {
                 t = e;
@@ -226,6 +217,59 @@ class OriginThreadPublisher implements Flow.Publisher<DataChunk> {
         } finally {
             reentrantLock.unlock();
             referenceQueue.release();
+        }
+    }
+
+    void submit(Map<String, List<InterfaceHttpData>> multiPartHttpDataMap) {
+        try {
+            reentrantLock.lock();
+            for (Entry<String, List<InterfaceHttpData>> entry : multiPartHttpDataMap.entrySet()) {
+                for (InterfaceHttpData data : entry.getValue()) {
+                    if (data instanceof FileUpload) {
+                        BodyPartHeaders headers = new ReadOnlyBodyPartHeaders(
+                                    ((FileUpload) data).getName(),
+                                    ((FileUpload) data).getFilename(),
+                                    ((FileUpload) data).getContentType(),
+                                    ((FileUpload) data).getContentTransferEncoding(),
+                                    ((FileUpload) data).getCharset(),
+                                    ((FileUpload) data).definedLength());
+                        final ByteBufMultiPartRequestChunk chunk = new ByteBufMultiPartRequestChunk(
+                                ((FileUpload) data).content(),
+                                headers,
+                                ((FileUpload) data).isCompleted(),
+                                referenceQueue);
+                        submit(chunk);
+                    }
+                }
+            }
+        } catch (RuntimeException e) {
+            if (singleSubscriber == null) {
+                t = e;
+            } else {
+                error(new IllegalStateException("An error occurred when submitting data.", e));
+            }
+        } finally {
+            reentrantLock.unlock();
+            referenceQueue.release();
+        }
+    }
+
+    private void submit(ByteBufRequestChunk chunk){
+        if (!queue.offer(chunk)) {
+            LOGGER.severe("Unable to add an element to the publisher cache.");
+            error(new IllegalStateException("Unable to add an element to the publisher cache."));
+            return;
+        }
+
+        if (nextCount.get() < reqCount) {
+            nextCount.incrementAndGet();
+            // the poll is never expected to return null
+            ByteBufRequestChunk item = queue.poll();
+
+            LOGGER.finest(() -> "Publishing request chunk: " + (null == item ? "null" : item.id()));
+            singleSubscriber.onNext(item);
+        } else {
+            LOGGER.finest(() -> "Not publishing due to low request count: " + nextCount + " <= " + reqCount);
         }
     }
 

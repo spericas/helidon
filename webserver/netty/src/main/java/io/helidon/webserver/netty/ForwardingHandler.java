@@ -60,6 +60,7 @@ public class ForwardingHandler extends SimpleChannelInboundHandler<Object> {
     // this field is always accessed by the very same thread; as such, it doesn't need to be
     // concurrency aware
     private RequestContext requestContext;
+    private HttpPostMultipartRequestDecoder multipartDecoder;
 
     ForwardingHandler(Routing routing,
                       NettyWebServer webServer,
@@ -95,6 +96,12 @@ public class ForwardingHandler extends SimpleChannelInboundHandler<Object> {
             ctx.channel().config().setAutoRead(false);
 
             HttpRequest request = (HttpRequest) msg;
+
+            // XXX MULTIPART
+            if(HttpPostMultipartRequestDecoder.isMultipart(request)){
+                multipartDecoder = new HttpPostMultipartRequestDecoder(request);
+            }
+
             ReferenceHoldingQueue<ByteBufRequestChunk> queue = new ReferenceHoldingQueue<>();
             queues.add(queue);
             requestContext = new RequestContext(new HttpRequestScopedPublisher(ctx, queue), request);
@@ -109,8 +116,8 @@ public class ForwardingHandler extends SimpleChannelInboundHandler<Object> {
 
             bareResponse.whenCompleted()
                         .thenRun(() -> {
-                            RequestContext requestContext = this.requestContext;
-                            requestContext.responseCompleted(true);
+                            RequestContext reqCtx = this.requestContext;
+                            reqCtx.responseCompleted(true);
                             /*
                              * Cleanup for these queues is done in HttpInitializer. However,
                              * it may take a while for the event loop on the channel to
@@ -137,9 +144,16 @@ public class ForwardingHandler extends SimpleChannelInboundHandler<Object> {
             }
 
             HttpContent httpContent = (HttpContent) msg;
+            boolean readable = httpContent.content().isReadable();
+            ByteBuf content;
+            if(multipartDecoder != null){
+                multipartDecoder.offer(httpContent);
+                content = null;
+            } else {
+                content = httpContent.content();
+            }
 
-            ByteBuf content = httpContent.content();
-            if (content.isReadable()) {
+            if (readable) {
                 HttpMethod method = requestContext.request().method();
 
                 // compliance with RFC 7231
@@ -156,7 +170,11 @@ public class ForwardingHandler extends SimpleChannelInboundHandler<Object> {
                     LOGGER.finer(() -> "Closing connection because request payload was not consumed; method: " + method);
                     ctx.close();
                 } else {
-                    requestContext.publisher().submit(content);
+                    if(content != null){
+                        requestContext.publisher().submit(content);
+                    } else {
+                        requestContext.publisher().submit(multipartDecoder.getHttpData());
+                    }
                 }
             }
 
@@ -164,10 +182,16 @@ public class ForwardingHandler extends SimpleChannelInboundHandler<Object> {
                 requestContext.publisher().complete();
                 requestContext = null; // just to be sure that current http req/res session doesn't interfere with other ones
 
+                // XXX MULTIPART
+                if(multipartDecoder != null){
+                    multipartDecoder.destroy();
+                    multipartDecoder = null;
+                }
+
                 // with the last http request content, the tcp connection has to become 'autoReadable'
                 // so that next http request can be obtained
                 ctx.channel().config().setAutoRead(true);
-            } else if (!content.isReadable()) {
+            } else if (!readable) {
                 // this is here to handle the case when the content is not readable but we didn't
                 // exceptionally complete the publisher and close the connection
                 throw new IllegalStateException("It is not expected to not have readable content.");
