@@ -233,7 +233,7 @@ class OriginThreadPublisher implements Flow.Publisher<DataChunk> {
                                     ((FileUpload) data).getContentTransferEncoding(),
                                     ((FileUpload) data).getCharset(),
                                     ((FileUpload) data).definedLength());
-                        final ByteBufMultiPartRequestChunk chunk = new ByteBufMultiPartRequestChunk(
+                        final MultiPartRequestChunk chunk = new MultiPartRequestChunk(
                                 ((FileUpload) data).content(),
                                 headers,
                                 ((FileUpload) data).isCompleted(),

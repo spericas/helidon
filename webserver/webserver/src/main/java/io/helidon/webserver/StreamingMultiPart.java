@@ -15,8 +15,7 @@
  */
 package io.helidon.webserver;
 
-import java.util.concurrent.CompletionStage;
-import java.util.function.Consumer;
+import io.helidon.common.reactive.Flow;
 
 /**
  * An entity that represents a top level multipart payload (i.e all the body parts in the request),
@@ -25,21 +24,5 @@ import java.util.function.Consumer;
  *
  * The number of body parts in the request is not known ahead of time.
  */
-public interface StreamingMultiPart extends BodyPart {
-
-    /**
-     * Register a consumer of body part that is invoked for each body part
-     * available in the request.
-     * @param handler the handler invoked when there is a body part available
-     * for consumption
-     * @return this multipart instance
-     */
-    StreamingMultiPart onBodyPart(Consumer<BodyPart> handler);
-
-    /**
-     * Returns a completion stage that is complete when all body parts have been
-     * processed. The stage is failed if an error occurred during processing.
-     * @return the completion stage
-     */
-    CompletionStage<Void> onComplete();
+public interface StreamingMultiPart extends Flow.Publisher<BodyPart> {
 }

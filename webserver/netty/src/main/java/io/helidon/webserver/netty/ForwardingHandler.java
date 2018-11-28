@@ -146,7 +146,7 @@ public class ForwardingHandler extends SimpleChannelInboundHandler<Object> {
             HttpContent httpContent = (HttpContent) msg;
             boolean readable = httpContent.content().isReadable();
             ByteBuf content;
-            if(multipartDecoder != null){
+            if (multipartDecoder != null){
                 multipartDecoder.offer(httpContent);
                 content = null;
             } else {
@@ -170,7 +170,7 @@ public class ForwardingHandler extends SimpleChannelInboundHandler<Object> {
                     LOGGER.finer(() -> "Closing connection because request payload was not consumed; method: " + method);
                     ctx.close();
                 } else {
-                    if(content != null){
+                    if (content != null){
                         requestContext.publisher().submit(content);
                     } else {
                         requestContext.publisher().submit(multipartDecoder.getHttpData());

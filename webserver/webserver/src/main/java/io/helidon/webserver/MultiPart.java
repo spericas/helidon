@@ -15,27 +15,12 @@
  */
 package io.helidon.webserver;
 
-import io.helidon.common.http.BodyPartHeaders;
-import io.helidon.common.http.Content;
+import java.util.Collection;
 
 /**
- * An entity representing a nested body part.
+ * An entity that represents a top level multipart payload.
  */
-public interface BodyPart {
+public interface MultiPart {
 
-    /**
-     * Get the body part headers.
-     * @return the body part headers
-     * @throws IllegalStateException if this body part is the top level
-     * {@link StreamingMultiPart} entity
-     */
-    BodyPartHeaders headers();
-
-    /**
-     * Returns a reactive representation of the body part content.
-     * @return body part content
-     * @throws IllegalStateException if this body part is the top level
-     * {@link StreamingMultiPart} entity
-     */
-    Content content();
+    Collection<BodyPart> bodyParts();
 }

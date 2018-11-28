@@ -16,8 +16,9 @@
 
 package io.helidon.webserver;
 
-import java.util.concurrent.CompletionStage;
-import java.util.function.Consumer;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
 import io.helidon.common.http.BodyPartHeaders;
@@ -31,7 +32,7 @@ import io.helidon.common.reactive.Flow.Subscriber;
 import io.helidon.common.reactive.Flow.Subscription;
 
 /**
- * StreamingMultiPart support {@link Service} and {@link Handler}.
+ * MultiPartSupport support {@link Service} and {@link Handler}.
  */
 public class MultiPartSupport implements Service, Handler {
 
@@ -42,12 +43,17 @@ public class MultiPartSupport implements Service, Handler {
 
     @Override
     public void accept(final ServerRequest req, final ServerResponse res) {
-        req.headers().contentType().ifPresent((contentType) -> {
+        req.headers().contentType().ifPresent(contentType -> {
             if (contentType.type().equals(MediaType.MULTIPART_FORM_DATA.type())
                     && contentType.subtype().equals(MediaType.MULTIPART_FORM_DATA.subtype())) {
                 req.content().registerReader(StreamingMultiPart.class, (publisher, clazz) -> {
                     CompletableFuture<StreamingMultiPart> future = new CompletableFuture();
-                    future.complete(new MultiPartImpl(req, res, publisher));
+                    future.complete(new StreamingMultiPartImpl(req, res, publisher));
+                    return future;
+                });
+                req.content().registerReader(MultiPart.class, (publisher, clazz) -> {
+                    CompletableFuture<MultiPart> future = new CompletableFuture();
+                    new MultiPartImpl(req, res, publisher, future);
                     return future;
                 });
             }
@@ -56,34 +62,83 @@ public class MultiPartSupport implements Service, Handler {
     }
 
     /**
+     * Implementation of {@link MultiPart} that gathers all parts into
+     * a collection accessible via a getter method.
+     */
+    static final class MultiPartImpl implements MultiPart {
+
+        final List<BodyPart> bodyParts;
+        final StreamingMultiPart streamingMultiPart;
+        final CompletableFuture<MultiPart> future;
+
+        MultiPartImpl(final ServerRequest request,
+                      final ServerResponse response,
+                      final Publisher<DataChunk> originPublisher,
+                      final CompletableFuture<MultiPart> future) {
+            this.future = future;
+            bodyParts = new ArrayList<>();
+            streamingMultiPart = new StreamingMultiPartImpl(request, response, originPublisher);
+            streamingMultiPart.subscribe(new Subscriber<BodyPart>() {
+                @Override
+                public void onSubscribe(Subscription subscription) {
+                    subscription.request(Long.MAX_VALUE);
+                }
+
+                @Override
+                public void onNext(BodyPart item) {
+                    bodyParts.add(item);
+                }
+
+                @Override
+                public void onError(Throwable throwable) {
+                    future.completeExceptionally(throwable);
+                }
+
+                @Override
+                public void onComplete() {
+                    future.complete(MultiPartImpl.this);
+                }
+            });
+        }
+
+        @Override
+        public Collection<BodyPart> bodyParts() {
+            return bodyParts;
+        }
+    }
+
+    /**
      * Implementation of {@link StreamingMultiPart}.
      */
-    static final class MultiPartImpl implements StreamingMultiPart {
+    static final class StreamingMultiPartImpl implements StreamingMultiPart {
 
         private final ServerRequest request;
         private final ServerResponse response;
-        private final CompletableFuture completeFuture;
         private final BodyPartProcessor processor;
         private final Publisher<DataChunk> originPublisher;
-        private Consumer<BodyPart> bodyPartConsumer = null;
-        private BodyPartImpl currentBodyPart = null;
+        private StreamingBodyPartImpl currentBodyPart;
+        private Subscriber<? super BodyPart> subscriber;
 
         /**
          * Create a new multipart entity.
+         *
          * @param request the server request
          * @param response the server response
          * @param originPublisher the original publisher (request content)
          */
-        MultiPartImpl(final ServerRequest request,
-                final ServerResponse response,
-                final Publisher<DataChunk> originPublisher) {
-
+        StreamingMultiPartImpl(final ServerRequest request,
+                               final ServerResponse response,
+                               final Publisher<DataChunk> originPublisher) {
             this.request = request;
             this.response = response;
-            this.completeFuture = new CompletableFuture();
             this.originPublisher = originPublisher;
             this.processor = new BodyPartProcessor(this);
             originPublisher.subscribe(processor);
+        }
+
+        @Override
+        public void subscribe(Subscriber<? super BodyPart> subscriber) {
+            this.subscriber = subscriber;
         }
 
         public ServerRequest request() {
@@ -92,47 +147,6 @@ public class MultiPartSupport implements Service, Handler {
 
         public ServerResponse response() {
             return response;
-        }
-
-        @Override
-        public BodyPartHeaders headers() {
-            throw new IllegalStateException(
-                    "cannot invoke headers() on top level entity");
-        }
-
-        @Override
-        public Content content() {
-            throw new IllegalStateException(
-                    "cannot invoke content() on top level entity");
-        }
-
-        @Override
-        public BodyPart parent() {
-            return null;
-        }
-
-        @Override
-        public StreamingMultiPart onBodyPart(final Consumer<BodyPart> handler) {
-            if(this.bodyPartConsumer != null){
-                throw new IllegalStateException("Handler already registered");
-            }
-            if(handler == null){
-                throw new IllegalArgumentException("Handler is null");
-            }
-            this.bodyPartConsumer = handler;
-            return this;
-        }
-
-        @Override
-        public CompletionStage onComplete() {
-            return completeFuture;
-        }
-
-        /**
-         * @return the original (request content) publisher
-         */
-        Publisher<DataChunk> originPublisher(){
-            return originPublisher;
         }
 
         /**
@@ -144,12 +158,13 @@ public class MultiPartSupport implements Service, Handler {
 
         /**
          * Submit the current body for consumption.
+         *
          * @return {@code true} if there is a handler registered to consume
-         *  the body, {@code false} otherwise
+         * the body, {@code false} otherwise
          */
-        boolean onNewBodyPart(){
-            if(bodyPartConsumer != null && currentBodyPart != null){
-                bodyPartConsumer.accept(currentBodyPart);
+        boolean onNewBodyPart() {
+            if (subscriber != null && currentBodyPart != null) {
+                subscriber.onNext(currentBodyPart);
                 return true;
             }
             return false;
@@ -159,31 +174,24 @@ public class MultiPartSupport implements Service, Handler {
          * Setup the next body part entity and subscribe it to the processor.
          * If the current body part entity is non {@code null}, its subscription
          * will be canceled first and the processor (re)subscribed to the
-         *  original publisher.
+         * original publisher.
          */
-        void setupNextBodyPart(){
-            if(currentBodyPart != null){
+        void setupNextBodyPart() {
+            if (currentBodyPart != null) {
                 currentBodyPart.cancelSubscription();
                 originPublisher.subscribe(processor);
             }
-            currentBodyPart = new BodyPartImpl(this);
+            currentBodyPart = new StreamingBodyPartImpl(this);
             processor.subscribe(currentBodyPart);
         }
 
-        /**
-         * Propagate the given error in the complete future.
-         * @param error the error to propagate
-         */
-        void onError(final Throwable error){
-            completeFuture.completeExceptionally(error);
+        void onError(final Throwable error) {
+            subscriber.onError(error);
         }
 
-        /**
-         * Complete the future if the processor is complete.
-         */
-        void onBodyPartComplete(){
-            if(processor.isComplete()){
-                completeFuture.complete(null);
+        void onBodyPartComplete() {
+            if (processor.isComplete()) {
+                subscriber.onComplete();
             }
         }
     }
@@ -193,23 +201,23 @@ public class MultiPartSupport implements Service, Handler {
      * This class is a delegated processor that converts a reactive stream of
      * {@link MultiPartDataChunk} into a stream of {@link DataChunk}.
      */
-    static class BodyPartImpl implements BodyPart,
+    static class StreamingBodyPartImpl implements BodyPart,
             Subscriber<MultiPartDataChunk>, Publisher<DataChunk> {
 
-        private final MultiPartImpl parent;
+        private final StreamingMultiPartImpl parent;
         private final Content content;
         private BodyPartSubscription subscription = null;
         private Subscriber<? super DataChunk> subscriber = null;
         private BodyPartHeaders headers = null;
         private boolean complete = false;
 
-        BodyPartImpl(final MultiPartImpl parent) {
-            if(parent == null){
+        StreamingBodyPartImpl(final StreamingMultiPartImpl parent) {
+            if (parent == null) {
                 throw new IllegalArgumentException("Parent cannot be null");
             }
             this.parent = parent;
             this.content = new Request.Content(
-                    (Request)parent.request(), this);
+                    (Request) parent.request(), this);
         }
 
         public ServerRequest request() {
@@ -222,7 +230,7 @@ public class MultiPartSupport implements Service, Handler {
 
         @Override
         public BodyPartHeaders headers() {
-            if(headers == null){
+            if (headers == null) {
                 throw new IllegalStateException(
                         "needs at least one processed chunk");
             }
@@ -235,13 +243,8 @@ public class MultiPartSupport implements Service, Handler {
         }
 
         @Override
-        public BodyPart parent() {
-            return parent;
-        }
-
-        @Override
         public void onSubscribe(final Subscription s) {
-            if(subscription != null){
+            if (subscription != null) {
                 throw new IllegalStateException("Subscription is not null");
             }
             subscription = new BodyPartSubscription(s, parent.processor());
@@ -252,7 +255,7 @@ public class MultiPartSupport implements Service, Handler {
             checkComplete();
             checkSubscriber();
             checkSubscription();
-            if(headers == null){
+            if (headers == null) {
                 headers = item.headers();
             }
             subscriber.onNext(item);
@@ -262,7 +265,7 @@ public class MultiPartSupport implements Service, Handler {
         @Override
         public void onError(final Throwable throwable) {
             checkComplete();
-            if(subscriber == null){
+            if (subscriber == null) {
                 throw new IllegalStateException("Subscriber is null", throwable);
             }
             subscriber.onError(throwable);
@@ -277,8 +280,8 @@ public class MultiPartSupport implements Service, Handler {
             subscriber.onComplete();
             subscriber = null;
             parent.onBodyPartComplete();
-            if(!parent.processor().isComplete()
-                    && !subscription.hasUndelivered()){
+            if (!parent.processor().isComplete()
+                    && !subscription.hasUndelivered()) {
                 // if the current subscription has not requested enough to
                 // receive the chunk for the next potential body part
                 // request 1 more to make sure we can receive it
@@ -288,7 +291,7 @@ public class MultiPartSupport implements Service, Handler {
 
         @Override
         public void subscribe(final Subscriber<? super DataChunk> s) {
-            if(subscriber != null){
+            if (subscriber != null) {
                 throw new IllegalStateException("Already subscribed");
             }
             checkComplete();
@@ -299,6 +302,7 @@ public class MultiPartSupport implements Service, Handler {
 
         /**
          * Cancel the subscription.
+         *
          * @throws IllegalStateException if the subscription is {@code null}
          */
         void cancelSubscription() {
@@ -308,34 +312,37 @@ public class MultiPartSupport implements Service, Handler {
 
         /**
          * Check if this publisher is completed.
+         *
          * @throws {@link IllegalStateException} if this publisher is already
-         *  completed
+         * completed
          */
-        private void checkComplete(){
-            if(complete){
+        private void checkComplete() {
+            if (complete) {
                 throw new IllegalStateException("Already completed");
             }
         }
 
         /**
          * Check if this publisher has a subscriber.
+         *
          * @throws {@link IllegalStateException} if this publisher does not
-         *  have a subscriber
+         * have a subscriber
          */
-        private void checkSubscriber(){
-            if(subscriber == null){
+        private void checkSubscriber() {
+            if (subscriber == null) {
                 throw new IllegalStateException("Subscriber is null");
             }
         }
 
         /**
          * Check if this publisher has a subscription.
+         *
          * @throws {@link IllegalStateException} if this publisher does not
-         *  have a subscription
+         * have a subscription
          */
-        private void checkSubscription(){
-            if(subscription == null){
-                throw new  IllegalArgumentException("Subscription is null");
+        private void checkSubscription() {
+            if (subscription == null) {
+                throw new IllegalArgumentException("Subscription is null");
             }
         }
     }
@@ -344,8 +351,8 @@ public class MultiPartSupport implements Service, Handler {
      * A delegated subscription used to send the (cached) first chunk when
      * the content subscriber has requested data.
      * It keeps the count of requested and delivered items in order to indicate
-     *  if there are more items to be delivered, see {@link #hasUndelivered()},
-     *  {@link #onDelivered().
+     * if there are more items to be delivered, see {@link #hasUndelivered()},
+     * {@link #onDelivered().
      */
     static class BodyPartSubscription implements Subscription {
 
@@ -357,28 +364,30 @@ public class MultiPartSupport implements Service, Handler {
 
         /**
          * Create a new body part subscription.
+         *
          * @param delegate the subscription to delegate
          * @param processor the body part processor
          */
         BodyPartSubscription(final Subscription delegate,
-                final BodyPartProcessor processor) {
+                             final BodyPartProcessor processor) {
             this.delegate = delegate;
             this.processor = processor;
         }
 
         /**
          * Check if this subscription expects more items.
+         *
          * @return {@code true} if this subscription expects more items to be
-         *  delivered, {@code false} otherwise
+         * delivered, {@code false} otherwise
          */
-        boolean hasUndelivered(){
+        boolean hasUndelivered() {
             return requested == Long.MAX_VALUE || requested > delivered;
         }
 
         /**
          * Increase the count of delivered items of this subscription.
          */
-        void onDelivered(){
+        void onDelivered() {
             delivered++;
         }
 
@@ -386,15 +395,15 @@ public class MultiPartSupport implements Service, Handler {
         public void request(long n) {
             checkCanceled();
             long reqCount = n;
-            if(n > 0){
-                if(delivered == 0){
+            if (n > 0) {
+                if (delivered == 0) {
                     reqCount--;
                     requested += (reqCount);
                     processor.submitFirstChunk();
                 } else {
                     requested += reqCount;
                 }
-                if(requested > delivered){
+                if (requested > delivered) {
                     delegate.request(reqCount);
                 }
             }
@@ -409,11 +418,12 @@ public class MultiPartSupport implements Service, Handler {
 
         /**
          * Check if this subscription is canceled.
+         *
          * @throws {@link IllegalStateException} if this is subscription is
-         *  canceled
+         * canceled
          */
-        private void checkCanceled(){
-            if(canceled){
+        private void checkCanceled() {
+            if (canceled) {
                 throw new IllegalArgumentException("Subscription has been canceled");
             }
         }
@@ -421,15 +431,14 @@ public class MultiPartSupport implements Service, Handler {
 
     /**
      * A delegated processor that converts a reactive stream of {@link DataChunk}
-     *  into a stream of {@link MultiPartDataChunk}.
+     * into a stream of {@link MultiPartDataChunk}.
      *
      * The processor exposes a method {@link #isComplete()} that is used to
      * check if there are more parts available.
      */
-    static class BodyPartProcessor implements Subscriber<DataChunk>,
-            Publisher<MultiPartDataChunk> {
+    static class BodyPartProcessor implements Subscriber<DataChunk>, Publisher<MultiPartDataChunk> {
 
-        private final MultiPartImpl multiPart;
+        private final StreamingMultiPartImpl multiPart;
         private boolean complete = false;
         private Subscriber<? super MultiPartDataChunk> subscriber = null;
         private Subscription subscription = null;
@@ -438,16 +447,18 @@ public class MultiPartSupport implements Service, Handler {
 
         /**
          * Create a new processor.
+         *
          * @param multiPart the multiPart entity
          */
-        BodyPartProcessor(final MultiPartImpl multiPart) {
+        BodyPartProcessor(final StreamingMultiPartImpl multiPart) {
             this.multiPart = multiPart;
         }
 
         /**
          * Indicate if there are no more chunks available in the stream.
+         *
          * @return {@code true} if there are no more chunks available,
-         *  {@code false} otherwise.
+         * {@code false} otherwise.
          */
         boolean isComplete() {
             return complete;
@@ -455,12 +466,12 @@ public class MultiPartSupport implements Service, Handler {
 
         @Override
         public void onSubscribe(final Flow.Subscription s) {
-            if(subscription != null){
+            if (subscription != null) {
                 throw new IllegalStateException("Subscription should not null");
             }
             subscription = s;
             // request the first chunk only to start things off
-            if(!started){
+            if (!started) {
                 subscription.request(1);
                 started = true;
             }
@@ -470,7 +481,7 @@ public class MultiPartSupport implements Service, Handler {
         public void onNext(final DataChunk item) {
             if (item instanceof MultiPartDataChunk) {
                 MultiPartDataChunk chunk = (MultiPartDataChunk) item;
-                if(firstChunk == null){
+                if (firstChunk == null) {
                     firstChunk = chunk;
                     multiPart.setupNextBodyPart();
                     multiPart.onNewBodyPart();
@@ -484,10 +495,11 @@ public class MultiPartSupport implements Service, Handler {
 
         /**
          * Submit the first (cached) chunk.
+         *
          * @throws IllegalArgumentException if the first chunk is {@code null}
          */
-        void submitFirstChunk(){
-            if(firstChunk == null){
+        void submitFirstChunk() {
+            if (firstChunk == null) {
                 throw new IllegalStateException("First chunk is null");
             }
             submitChunk(firstChunk);
@@ -495,11 +507,12 @@ public class MultiPartSupport implements Service, Handler {
 
         /**
          * Submit the given chunk.
+         *
          * @param chunk the chunk to submit
          */
         private void submitChunk(MultiPartDataChunk chunk) {
             checkComplete();
-            if(subscriber == null){
+            if (subscriber == null) {
                 throw new IllegalStateException("Subscriber is null");
             }
             subscriber.onNext(chunk);
@@ -515,7 +528,7 @@ public class MultiPartSupport implements Service, Handler {
 
         @Override
         public void onError(final Throwable throwable) {
-            if(subscriber == null){
+            if (subscriber == null) {
                 throw new IllegalStateException(
                         "Cannot delegate error, subscriber is null", throwable);
             }
@@ -542,11 +555,12 @@ public class MultiPartSupport implements Service, Handler {
 
         /**
          * Check if this processor is completed.
+         *
          * @throws {@link IllegalStateException} if this publisher is already
-         *  completed
+         * completed
          */
-        private void checkComplete(){
-            if(complete){
+        private void checkComplete() {
+            if (complete) {
                 throw new IllegalStateException("Already completed");
             }
         }

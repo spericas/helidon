@@ -16,6 +16,11 @@
 
 package io.helidon.webserver.examples.multipart;
 
+import io.helidon.common.reactive.Flow;
+import io.helidon.webserver.BodyPart;
+import io.helidon.webserver.MultiPart;
+import io.helidon.webserver.ServerRequest;
+import io.helidon.webserver.ServerResponse;
 import io.helidon.webserver.StreamingMultiPart;
 import io.helidon.webserver.MultiPartSupport;
 import io.helidon.webserver.Routing;
@@ -41,24 +46,47 @@ public class Main {
                         .welcomeFileName("index.html")
                         .build())
                 .register(new MultiPartSupport())
-                .any("/upload", (req, res) -> {
-                    req.content().as(StreamingMultiPart.class).thenAccept((multiPart) -> {
-                        multiPart.onBodyPart((bodyPart) -> {
-                            System.out.println("onBodyPart: " + bodyPart);
-                            bodyPart.content().as(String.class).thenAccept((str) -> {
-                                System.out.println("File uploaded: " + bodyPart.headers().filename());
-                            });
-                        }).onComplete().thenRun(() -> {
-                            System.out.println("sending response");
-                            res.send("Files uploaded successfully");
-                        }).exceptionally((Throwable t) -> {
-                            res.status(500);
-                            res.send();
-                            return null;
-                        });
-                    });
-                })
+                // .any("/upload", Main::handleUpload)
+                .any("/upload", Main::handleStreamingUpload)
                 .build();
+    }
+
+    private static void handleUpload(ServerRequest req, ServerResponse res) {
+        req.content().as(MultiPart.class).thenAccept(multiPart -> {
+            multiPart.bodyParts().forEach(bodyPart -> {
+                System.out.println(bodyPart);
+            });
+            res.send();
+        });
+    }
+
+    private static void handleStreamingUpload(ServerRequest req, ServerResponse res) {
+        req.content().as(StreamingMultiPart.class).thenAccept(multiPart ->
+                multiPart.subscribe(new Flow.Subscriber<BodyPart>() {
+                    @Override
+                    public void onSubscribe(Flow.Subscription subscription) {
+                        subscription.request(Long.MAX_VALUE);
+                    }
+
+                    @Override
+                    public void onNext(BodyPart bodyPart) {
+                        System.out.println("onBodyPart: " + bodyPart);
+                        bodyPart.content().as(String.class).thenAccept((str) -> {
+                            System.out.println("File uploaded: " + bodyPart.headers().filename());
+                        });
+                    }
+
+                    @Override
+                    public void onError(Throwable throwable) {
+                        res.status(500).send("Error uploading files");
+                    }
+
+                    @Override
+                    public void onComplete() {
+                        res.send("Files uploaded successfully");
+                    }
+                })
+        );
     }
 
     /**

@@ -21,18 +21,16 @@ import io.helidon.common.http.MultiPartDataChunk;
 import io.netty.buffer.ByteBuf;
 
 /**
- *
  * @author rgrecour
  */
-class ByteBufMultiPartRequestChunk extends ByteBufRequestChunk implements MultiPartDataChunk {
+class MultiPartRequestChunk extends ByteBufRequestChunk implements MultiPartDataChunk {
 
     private final BodyPartHeaders headers;
     private final boolean isLast;
 
-    ByteBufMultiPartRequestChunk(final ByteBuf buf,
-            final BodyPartHeaders headers, final boolean isLast,
-            final ReferenceHoldingQueue<ByteBufRequestChunk> referenceHoldingQueue) {
-
+    MultiPartRequestChunk(final ByteBuf buf,
+                          final BodyPartHeaders headers, final boolean isLast,
+                          final ReferenceHoldingQueue<ByteBufRequestChunk> referenceHoldingQueue) {
         super(buf, referenceHoldingQueue);
         this.headers = headers;
         this.isLast = isLast;
