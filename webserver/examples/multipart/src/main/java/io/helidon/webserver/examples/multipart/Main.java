@@ -16,23 +16,20 @@
 
 package io.helidon.webserver.examples.multipart;
 
+import java.io.IOException;
+
 import io.helidon.common.reactive.Flow;
 import io.helidon.webserver.BodyPart;
 import io.helidon.webserver.MultiPart;
-import io.helidon.webserver.ServerRequest;
-import io.helidon.webserver.ServerResponse;
-import io.helidon.webserver.StreamingMultiPart;
 import io.helidon.webserver.MultiPartSupport;
 import io.helidon.webserver.Routing;
 import io.helidon.webserver.ServerConfiguration;
+import io.helidon.webserver.ServerRequest;
+import io.helidon.webserver.ServerResponse;
 import io.helidon.webserver.StaticContentSupport;
+import io.helidon.webserver.StreamingMultiPart;
 import io.helidon.webserver.WebServer;
-import java.io.IOException;
 
-/**
- * 
- * @author rgrecour
- */
 public class Main {
 
     /**
@@ -46,16 +43,17 @@ public class Main {
                         .welcomeFileName("index.html")
                         .build())
                 .register(new MultiPartSupport())
-                // .any("/upload", Main::handleUpload)
-                .any("/upload", Main::handleStreamingUpload)
+                .any("/upload1", Main::handleUpload)
+                .any("/upload2", Main::handleStreamingUpload)
                 .build();
     }
 
     private static void handleUpload(ServerRequest req, ServerResponse res) {
         req.content().as(MultiPart.class).thenAccept(multiPart -> {
-            multiPart.bodyParts().forEach(bodyPart -> {
-                System.out.println(bodyPart);
-            });
+            multiPart.bodyParts().forEach(bodyPart ->
+                    bodyPart.content().as(String.class).thenAccept(str ->
+                            System.out.println("File: " + str))
+                    );
             res.send();
         });
     }
@@ -71,8 +69,8 @@ public class Main {
                     @Override
                     public void onNext(BodyPart bodyPart) {
                         System.out.println("onBodyPart: " + bodyPart);
-                        bodyPart.content().as(String.class).thenAccept((str) -> {
-                            System.out.println("File uploaded: " + bodyPart.headers().filename());
+                        bodyPart.content().as(String.class).thenAccept(str -> {
+                            System.out.println("File: " + str);
                         });
                     }
 
@@ -95,12 +93,13 @@ public class Main {
      * @param args command line arguments.
      * @throws IOException if there are problems reading logging properties
      */
-    public static void main(String[] args) throws IOException{
+    public static void main(String[] args) throws IOException {
         startServer();
     }
 
     /**
      * Start the server.
+     *
      * @return the created {@link WebServer} instance
      * @throws IOException if there are problems reading logging properties
      */

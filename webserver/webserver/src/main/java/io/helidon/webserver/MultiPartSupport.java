@@ -16,6 +16,8 @@
 
 package io.helidon.webserver;
 
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
@@ -35,6 +37,11 @@ import io.helidon.common.reactive.Flow.Subscription;
  * MultiPartSupport support {@link Service} and {@link Handler}.
  */
 public class MultiPartSupport implements Service, Handler {
+
+    static void log(String message) {
+        System.out.println("=======> " + message);
+        System.out.flush();
+    }
 
     @Override
     public void update(final Routing.Rules rules) {
@@ -84,9 +91,43 @@ public class MultiPartSupport implements Service, Handler {
                     subscription.request(Long.MAX_VALUE);
                 }
 
+                /**
+                 * Collect all chunks for a part and create a buffered part that
+                 * holds a single {@link DataChunk} with all its content.
+                 *
+                 * @param bodyPart The body part received.
+                 */
                 @Override
-                public void onNext(BodyPart item) {
-                    bodyParts.add(item);
+                public void onNext(BodyPart bodyPart) {
+                    ByteArrayOutputStream baos = new ByteArrayOutputStream();
+                    bodyPart.content().subscribe(new Subscriber<DataChunk>() {
+                        @Override
+                        public void onSubscribe(Subscription subscription) {
+                            subscription.request(Long.MAX_VALUE);
+                        }
+
+                        @Override
+                        public void onNext(DataChunk item) {
+                            final byte[] data = item.bytes();
+                            try {
+                                baos.write(data);
+                            } catch (IOException e) {
+                                future.completeExceptionally(e);
+                            }
+                        }
+
+                        @Override
+                        public void onError(Throwable throwable) {
+                            future.completeExceptionally(throwable);
+                        }
+
+                        @Override
+                        public void onComplete() {
+                            DataChunk partData = DataChunk.create(baos.toByteArray());
+                            bodyParts.add(new BodyPartImpl(request, bodyPart.headers(), partData));
+                            log("Part completed " + bodyPart);
+                        }
+                    });
                 }
 
                 @Override
@@ -96,6 +137,7 @@ public class MultiPartSupport implements Service, Handler {
 
                 @Override
                 public void onComplete() {
+                    log("Multipart completed " + MultiPartImpl.this);
                     future.complete(MultiPartImpl.this);
                 }
             });
@@ -104,6 +146,57 @@ public class MultiPartSupport implements Service, Handler {
         @Override
         public Collection<BodyPart> bodyParts() {
             return bodyParts;
+        }
+    }
+
+    /**
+     * An implementation of {@link BodyPart} whose content is represented by a
+     * single {@link DataChunk}.
+     */
+    static final class BodyPartImpl implements BodyPart {
+
+        private final ServerRequest request;
+        private final BodyPartHeaders headers;
+        private DataChunk dataChunk;
+
+        BodyPartImpl(ServerRequest request, BodyPartHeaders headers, DataChunk dataChunk) {
+            this.request = request;
+            this.headers = headers;
+            this.dataChunk = dataChunk;
+        }
+
+        @Override
+        public BodyPartHeaders headers() {
+            return headers;
+        }
+
+        /**
+         * Returns content that includes a {@link Publisher} producing a single
+         * {@link DataChunk} for this cached part.
+         *
+         * @return The content for this part.
+         */
+        @Override
+        public Content content() {
+            return new Request.Content((Request) request,
+                    (Subscriber<? super DataChunk> subscriber) -> {
+                        subscriber.onSubscribe(new Subscription() {
+                            @Override
+                            public void request(long n) {
+                                if (n > 0 && dataChunk != null) {
+                                    subscriber.onNext(dataChunk);
+                                    subscriber.onComplete();
+                                    dataChunk.release();
+                                    dataChunk = null;
+                                }
+                            }
+
+                            @Override
+                            public void cancel() {
+                                throw new UnsupportedOperationException("Subscription cannot be cancelled");
+                            }
+                        });
+                    });
         }
     }
 
@@ -479,6 +572,8 @@ public class MultiPartSupport implements Service, Handler {
 
         @Override
         public void onNext(final DataChunk item) {
+            log("BodyPartProcessor::onNext()");
+
             if (item instanceof MultiPartDataChunk) {
                 MultiPartDataChunk chunk = (MultiPartDataChunk) item;
                 if (firstChunk == null) {
@@ -537,6 +632,8 @@ public class MultiPartSupport implements Service, Handler {
 
         @Override
         public void onComplete() {
+            log("BodyPartProcessor::onComplete()");
+
             checkComplete();
             if (!complete) {
                 complete = true;
