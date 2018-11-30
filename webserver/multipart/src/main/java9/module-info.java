@@ -13,14 +13,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package io.helidon.webserver;
-
-import java.util.Collection;
 
 /**
- * An entity that represents a top level multipart payload.
+ * JSON serialization support for webserver.
  */
-public interface MultiPart {
+module io.helidon.webserver.json {
+    requires org.glassfish.java.json;
+    requires io.helidon.webserver;
 
-    Collection<BodyPart> bodyParts();
+    exports io.helidon.webserver.multipart;
 }

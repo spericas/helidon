@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2017, 2018 Oracle and/or its affiliates. All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,16 +13,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package io.helidon.webserver;
-
-import io.helidon.common.reactive.Flow;
 
 /**
- * An entity that represents a top level multipart payload (i.e all the body parts in the request),
- * or a nested part payload in the case of a multipart-mixed request. Only 1 level of
- * nested parts is supported.
- *
- * The number of body parts in the request is not known ahead of time.
+ * This package contains Multipart support.
  */
-public interface StreamingMultiPart extends Flow.Publisher<BodyPart> {
-}
+package io.helidon.webserver.multipart;

@@ -19,16 +19,16 @@ package io.helidon.webserver.examples.multipart;
 import java.io.IOException;
 
 import io.helidon.common.reactive.Flow;
-import io.helidon.webserver.BodyPart;
-import io.helidon.webserver.MultiPart;
-import io.helidon.webserver.MultiPartSupport;
 import io.helidon.webserver.Routing;
 import io.helidon.webserver.ServerConfiguration;
 import io.helidon.webserver.ServerRequest;
 import io.helidon.webserver.ServerResponse;
 import io.helidon.webserver.StaticContentSupport;
-import io.helidon.webserver.StreamingMultiPart;
 import io.helidon.webserver.WebServer;
+import io.helidon.webserver.multipart.MultiPart;
+import io.helidon.webserver.multipart.MultiPartSupport;
+import io.helidon.webserver.multipart.StreamingBodyPart;
+import io.helidon.webserver.multipart.StreamingMultiPart;
 
 public class Main {
 
@@ -49,28 +49,31 @@ public class Main {
     }
 
     private static void handleUpload(ServerRequest req, ServerResponse res) {
+        log("handleUpload");
+
         req.content().as(MultiPart.class).thenAccept(multiPart -> {
             multiPart.bodyParts().forEach(bodyPart ->
-                    bodyPart.content().as(String.class).thenAccept(str ->
-                            System.out.println("File: " + str))
-                    );
+                    bodyPart.content().as(String.class).thenAccept(str -> log(str)));
+
+            log("handleUpload sending response");
             res.send();
         });
     }
 
     private static void handleStreamingUpload(ServerRequest req, ServerResponse res) {
+        log("handleStreamingUpload");
+
         req.content().as(StreamingMultiPart.class).thenAccept(multiPart ->
-                multiPart.subscribe(new Flow.Subscriber<BodyPart>() {
+                multiPart.subscribe(new Flow.Subscriber<StreamingBodyPart>() {
                     @Override
                     public void onSubscribe(Flow.Subscription subscription) {
                         subscription.request(Long.MAX_VALUE);
                     }
 
                     @Override
-                    public void onNext(BodyPart bodyPart) {
-                        System.out.println("onBodyPart: " + bodyPart);
+                    public void onNext(StreamingBodyPart bodyPart) {
                         bodyPart.content().as(String.class).thenAccept(str -> {
-                            System.out.println("File: " + str);
+                            log(str);
                         });
                     }
 
@@ -81,10 +84,16 @@ public class Main {
 
                     @Override
                     public void onComplete() {
+                        log("handleStreamingUpload sending response");
                         res.send("Files uploaded successfully");
                     }
                 })
         );
+    }
+
+    private static void log(String message) {
+        System.out.println("LOG: (" + Thread.currentThread().getName() + ") " + message);
+        System.out.flush();
     }
 
     /**
@@ -113,13 +122,12 @@ public class Main {
 
         // Start the server and print some info.
         server.start().thenAccept(ws -> {
-            System.out.println(
-                    "WEB server is up! http://localhost:" + ws.port());
+            log("WEB server is up! http://localhost:" + ws.port());
         });
 
         // Server threads are not demon. NO need to block. Just react.
         server.whenShutdown().thenRun(()
-                -> System.out.println("WEB server is DOWN. Good bye!"));
+                -> log("WEB server is DOWN. Good bye!"));
 
         return server;
     }

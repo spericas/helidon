@@ -53,7 +53,7 @@ import static io.helidon.webserver.StringContentReader.requestContentCharset;
 /**
  * The basic abstract implementation of {@link ServerRequest}.
  */
-abstract class Request implements ServerRequest {
+public abstract class Request implements ServerRequest {
 
     private final BareRequest bareRequest;
     private final WebServer webServer;
@@ -199,7 +199,7 @@ abstract class Request implements ServerRequest {
         }
     }
 
-    static class Content implements io.helidon.common.http.Content {
+    public static class Content implements io.helidon.common.http.Content {
 
         private final Flow.Publisher<DataChunk> originalPublisher;
         private final Deque<InternalReader<?>> readers;
@@ -208,7 +208,7 @@ abstract class Request implements ServerRequest {
         private final ReadWriteLock filtersLock;
         private final Request request;
 
-        Content(Request request, Flow.Publisher<DataChunk> originalPublisher){
+        public Content(Request request, Flow.Publisher<DataChunk> originalPublisher){
             this.request = request;
             this.originalPublisher = originalPublisher;
             this.readers = new LinkedList<>();
