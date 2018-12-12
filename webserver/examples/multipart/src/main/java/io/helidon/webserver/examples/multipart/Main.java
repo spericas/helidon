@@ -17,6 +17,8 @@
 package io.helidon.webserver.examples.multipart;
 
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
 
 import io.helidon.common.reactive.Flow;
 import io.helidon.webserver.Routing;
@@ -25,10 +27,11 @@ import io.helidon.webserver.ServerRequest;
 import io.helidon.webserver.ServerResponse;
 import io.helidon.webserver.StaticContentSupport;
 import io.helidon.webserver.WebServer;
+import io.helidon.webserver.multipart.BodyPart;
 import io.helidon.webserver.multipart.MultiPart;
 import io.helidon.webserver.multipart.MultiPartSupport;
-import io.helidon.webserver.multipart.StreamingBodyPart;
-import io.helidon.webserver.multipart.StreamingMultiPart;
+
+import static io.helidon.webserver.multipart.MultiPartSupport.multipart;
 
 public class Main {
 
@@ -43,35 +46,23 @@ public class Main {
                         .welcomeFileName("index.html")
                         .build())
                 .register(new MultiPartSupport())
-                .any("/upload1", Main::handleUpload)
-                .any("/upload2", Main::handleStreamingUpload)
+                .any("/upload", Main::handleUpload)
+                .any("/download", Main::handleDownload)
                 .build();
     }
 
     private static void handleUpload(ServerRequest req, ServerResponse res) {
         log("handleUpload");
 
-        req.content().as(MultiPart.class).thenAccept(multiPart -> {
-            multiPart.bodyParts().forEach(bodyPart ->
-                    bodyPart.content().as(String.class).thenAccept(str -> log(str)));
-
-            log("handleUpload sending response");
-            res.send();
-        });
-    }
-
-    private static void handleStreamingUpload(ServerRequest req, ServerResponse res) {
-        log("handleStreamingUpload");
-
-        req.content().as(StreamingMultiPart.class).thenAccept(multiPart ->
-                multiPart.subscribe(new Flow.Subscriber<StreamingBodyPart>() {
+        req.content().as(MultiPart.class).thenAccept(multiPart ->
+                multiPart.subscribe(new Flow.Subscriber<BodyPart>() {
                     @Override
                     public void onSubscribe(Flow.Subscription subscription) {
                         subscription.request(Long.MAX_VALUE);
                     }
 
                     @Override
-                    public void onNext(StreamingBodyPart bodyPart) {
+                    public void onNext(BodyPart bodyPart) {
                         bodyPart.content().as(String.class).thenAccept(str -> {
                             log(str);
                         });
@@ -90,6 +81,19 @@ public class Main {
                 })
         );
     }
+
+    private static void handleDownload(ServerRequest req, ServerResponse res) {
+        log("handleDownload");
+
+        MultiPart multiPart = MultiPart.builder()
+                .bodyPart(BodyPart.builder().build())
+                .bodyPart(BodyPart.builder().build())
+                .build();
+
+        res.send(multiPart);
+    }
+
+    // --
 
     private static void log(String message) {
         System.out.println("LOG: (" + Thread.currentThread().getName() + ") " + message);
