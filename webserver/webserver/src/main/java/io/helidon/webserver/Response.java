@@ -28,6 +28,8 @@ import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
+import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.CompletionStage;
@@ -51,7 +53,7 @@ import reactor.core.publisher.Mono;
 /**
  * The basic implementation of {@link ServerResponse}.
  */
-abstract class Response implements ServerResponse {
+public abstract class Response implements ServerResponse {
 
     private final WebServer webServer;
     private final BareResponse bareResponse;
@@ -63,6 +65,19 @@ abstract class Response implements ServerResponse {
     private final SendLockSupport sendLockSupport;
     private final ArrayList<Writer> writers;
     private final ArrayList<Function<Flow.Publisher<DataChunk>, Flow.Publisher<DataChunk>>> filters;
+
+    /**
+     * Creates new instance for testing purposes only.
+     */
+    protected Response() {
+        this.webServer = null;
+        this.bareResponse = null;
+        this.headers = null;
+        this.completionStage = null;
+        this.sendLockSupport = null;
+        this.writers = new ArrayList<>(defaultWriters());
+        this.filters = new ArrayList<>();
+    }
 
     /**
      * Creates new instance.
@@ -150,7 +165,7 @@ abstract class Response implements ServerResponse {
      *
      * @return the related span context
      */
-    abstract SpanContext spanContext();
+    protected abstract SpanContext spanContext();
 
     @Override
     public WebServer webServer() {
@@ -174,6 +189,15 @@ abstract class Response implements ServerResponse {
     @Override
     public ResponseHeaders headers() {
         return headers;
+    }
+
+    /**
+     * Provides read-only access to the collection of writers.
+     *
+     * @return Collection of writers associated with this response.
+     */
+    public List<Writer> writers() {
+        return Collections.unmodifiableList(writers);
     }
 
     private Tracer tracer() {
@@ -314,25 +338,25 @@ abstract class Response implements ServerResponse {
         return completionStage;
     }
 
-    class Writer<T> {
+    public class Writer<T> {
         private final Predicate<Object> acceptPredicate;
         private final MediaType requestedContentType;
         private final Function<T, Flow.Publisher<DataChunk>> function;
 
-        Writer(Predicate acceptPredicate, MediaType contentType, Function<T, Flow.Publisher<DataChunk>> function) {
+        public Writer(Predicate acceptPredicate, MediaType contentType, Function<T, Flow.Publisher<DataChunk>> function) {
             Objects.requireNonNull(function, "Parameter function is null!");
             this.acceptPredicate = acceptPredicate == null ? o -> true : acceptPredicate;
             this.requestedContentType = contentType;
             this.function = function;
         }
 
-        Writer(Class<?> acceptType, MediaType contentType, Function<T, Flow.Publisher<DataChunk>> function) {
+        public Writer(Class<?> acceptType, MediaType contentType, Function<T, Flow.Publisher<DataChunk>> function) {
             this(acceptType == null ? null : (Predicate) o -> acceptType.isAssignableFrom(o.getClass()),
                  contentType,
                  function);
         }
 
-        boolean accept(Object o) {
+        public boolean accept(Object o) {
             if (o == null || !acceptPredicate.test(o)) {
                 return false;
             }
@@ -350,6 +374,10 @@ abstract class Response implements ServerResponse {
                                 }).asOptional()
                                 .filter(requestedContentType) // MediaType is a predicate of compatible media type
                                 .isPresent();
+        }
+
+        public Function<T, Flow.Publisher<DataChunk>> function() {
+            return function;
         }
     }
 

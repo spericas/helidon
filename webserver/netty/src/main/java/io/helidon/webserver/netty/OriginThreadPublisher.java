@@ -16,7 +16,9 @@
 
 package io.helidon.webserver.netty;
 
-import io.helidon.common.http.BodyPartHeaders;
+import java.util.List;
+import java.util.Map;
+import java.util.Map.Entry;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -25,15 +27,13 @@ import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.logging.Logger;
 
+import io.helidon.common.http.BodyPartHeaders;
 import io.helidon.common.http.DataChunk;
 import io.helidon.common.reactive.Flow;
-
 import io.netty.buffer.ByteBuf;
+import io.netty.handler.codec.http.multipart.Attribute;
 import io.netty.handler.codec.http.multipart.FileUpload;
 import io.netty.handler.codec.http.multipart.InterfaceHttpData;
-import java.util.List;
-import java.util.Map;
-import java.util.Map.Entry;
 
 /**
  * The OriginThreadPublisher's nature is to always run {@link io.helidon.common.reactive.Flow.Subscriber#onNext(Object)}
@@ -225,18 +225,27 @@ class OriginThreadPublisher implements Flow.Publisher<DataChunk> {
             reentrantLock.lock();
             for (Entry<String, List<InterfaceHttpData>> entry : multiPartHttpDataMap.entrySet()) {
                 for (InterfaceHttpData data : entry.getValue()) {
+                    BodyPartHeaders.BodyPartHeaderBuilder builder = BodyPartHeaders.builder();
                     if (data instanceof FileUpload) {
-                        BodyPartHeaders headers = new ReadOnlyBodyPartHeaders(
-                                    ((FileUpload) data).getName(),
-                                    ((FileUpload) data).getFilename(),
-                                    ((FileUpload) data).getContentType(),
-                                    ((FileUpload) data).getContentTransferEncoding(),
-                                    ((FileUpload) data).getCharset(),
-                                    ((FileUpload) data).definedLength());
+                        BodyPartHeaders headers = builder.name(data.getName())
+                                .filename(((FileUpload) data).getFilename())
+                                .contentType(((FileUpload) data).getContentType())
+                                .contentTransferEncoding(((FileUpload) data).getContentTransferEncoding())
+                                .charset(((FileUpload) data).getCharset())
+                                .size(((FileUpload) data).definedLength())
+                                .build();
                         final MultiPartRequestChunk chunk = new MultiPartRequestChunk(
                                 ((FileUpload) data).content(),
                                 headers,
                                 ((FileUpload) data).isCompleted(),
+                                referenceQueue);
+                        submit(chunk);
+                    } else if (data instanceof Attribute) {
+                        BodyPartHeaders headers = builder.name(data.getName()).build();
+                        final MultiPartRequestChunk chunk = new MultiPartRequestChunk(
+                                ((Attribute) data).content(),
+                                headers,
+                                true,
                                 referenceQueue);
                         submit(chunk);
                     }

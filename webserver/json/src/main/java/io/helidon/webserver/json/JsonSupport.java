@@ -16,6 +16,12 @@
 
 package io.helidon.webserver.json;
 
+import javax.json.Json;
+import javax.json.JsonReader;
+import javax.json.JsonReaderFactory;
+import javax.json.JsonStructure;
+import javax.json.JsonWriter;
+import javax.json.JsonWriterFactory;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.nio.ByteBuffer;
@@ -24,13 +30,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.function.Function;
-
-import javax.json.Json;
-import javax.json.JsonReader;
-import javax.json.JsonReaderFactory;
-import javax.json.JsonStructure;
-import javax.json.JsonWriter;
-import javax.json.JsonWriterFactory;
 
 import io.helidon.common.http.Content;
 import io.helidon.common.http.DataChunk;
@@ -169,6 +168,13 @@ public final class JsonSupport implements Service, Handler {
      */
     private boolean testOrSetContentType(ServerRequest request, ServerResponse response) {
         MediaType mt = response.headers().contentType().orElse(null);
+
+        // Allow serialization in a multipart/mixed response
+        if (mt.type().equals(MediaType.MULTIPART_MIXED.type())
+                && mt.subtype().equals(MediaType.MULTIPART_MIXED.subtype())) {
+            return true;
+        }
+
         if (mt == null) {
             // Find if accepts any JSON compatible type
             List<MediaType> acceptedTypes = request.headers().acceptedTypes();

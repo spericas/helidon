@@ -462,7 +462,7 @@ class RequestRouting implements Routing {
         }
 
         @Override
-        SpanContext spanContext() {
+        protected SpanContext spanContext() {
             return requestSpanContext;
         }
     }

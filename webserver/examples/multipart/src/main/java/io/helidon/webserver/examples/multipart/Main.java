@@ -16,10 +16,12 @@
 
 package io.helidon.webserver.examples.multipart;
 
+import javax.json.Json;
+import javax.json.JsonObject;
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.List;
 
+import io.helidon.common.http.BodyPartHeaders;
+import io.helidon.common.http.MediaType;
 import io.helidon.common.reactive.Flow;
 import io.helidon.webserver.Routing;
 import io.helidon.webserver.ServerConfiguration;
@@ -27,11 +29,10 @@ import io.helidon.webserver.ServerRequest;
 import io.helidon.webserver.ServerResponse;
 import io.helidon.webserver.StaticContentSupport;
 import io.helidon.webserver.WebServer;
+import io.helidon.webserver.json.JsonSupport;
 import io.helidon.webserver.multipart.BodyPart;
 import io.helidon.webserver.multipart.MultiPart;
 import io.helidon.webserver.multipart.MultiPartSupport;
-
-import static io.helidon.webserver.multipart.MultiPartSupport.multipart;
 
 public class Main {
 
@@ -46,6 +47,7 @@ public class Main {
                         .welcomeFileName("index.html")
                         .build())
                 .register(new MultiPartSupport())
+                .register(JsonSupport.get())
                 .any("/upload", Main::handleUpload)
                 .any("/download", Main::handleDownload)
                 .build();
@@ -85,15 +87,33 @@ public class Main {
     private static void handleDownload(ServerRequest req, ServerResponse res) {
         log("handleDownload");
 
+        res.headers().contentType(MediaType.MULTIPART_MIXED);
+
+        JsonObject json = Json.createObjectBuilder()
+                .add("msg", "This is part 2")
+                .build();
+
         MultiPart multiPart = MultiPart.builder()
-                .bodyPart(BodyPart.builder().build())
-                .bodyPart(BodyPart.builder().build())
+                .bodyPart(BodyPart.builder()
+                        .headers(BodyPartHeaders.builder()
+                                .name("part1")
+                                .contentType(MediaType.TEXT_PLAIN)
+                                .build())
+                        .entity("This is part 1")
+                        .build())
+                .bodyPart(BodyPart.builder()
+                        .headers(BodyPartHeaders.builder()
+                                .name("part2")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .build())
+                        .entity(json)
+                        .build())
                 .build();
 
         res.send(multiPart);
     }
 
-    // --
+    // ------------------------------------------------------------------------
 
     private static void log(String message) {
         System.out.println("LOG: (" + Thread.currentThread().getName() + ") " + message);

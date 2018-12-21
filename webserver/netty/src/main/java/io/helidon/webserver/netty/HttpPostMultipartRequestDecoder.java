@@ -184,17 +184,18 @@ public class HttpPostMultipartRequestDecoder {
         }
     }
 
-/**
+    /**
      * Check from the request ContentType if this request is a Multipart request.
      * @param contentType
      * @return an array of String if multipartDataBoundary exists with the multipartDataBoundary
      * as first element, charset if any as second (missing if not set), else null
      */
     protected static String[] getMultipartDataBoundary(String contentType) {
-        // Check if Post using "multipart/form-data; boundary=--89421926422648 [; charset=xxx]"
         String[] headerContentType = splitHeaderContentType(contentType);
-        final String multiPartHeader = HttpHeaderValues.MULTIPART_FORM_DATA.toString();
-        if (headerContentType[0].regionMatches(true, 0, multiPartHeader, 0 , multiPartHeader.length())) {
+        final String formData = HttpHeaderValues.MULTIPART_FORM_DATA.toString();
+        final String mixed = HttpHeaderValues.MULTIPART_MIXED.toString();
+        if (headerContentType[0].regionMatches(true, 0, formData, 0 , formData.length())
+            || headerContentType[0].regionMatches(true, 0, mixed, 0 , mixed.length())) {
             int mrank;
             int crank;
             final String boundaryHeader = HttpHeaderValues.BOUNDARY.toString();

@@ -73,6 +73,10 @@ public final class MediaType implements AcceptPredicate<MediaType> {
      */
     public static final MediaType MULTIPART_FORM_DATA = createMediaType("multipart", "form-data");
     /**
+     * A {@link MediaType} constant representing {@code multipart/mixed} media type.
+     */
+    public static final MediaType MULTIPART_MIXED = createMediaType("multipart", "mixed");
+    /**
      * A {@link MediaType} constant representing {@code application/octet-stream} media type.
      */
     public static final MediaType APPLICATION_OCTET_STREAM = createMediaType("application", "octet-stream");

@@ -18,49 +18,113 @@ package io.helidon.common.http;
 
 import java.nio.charset.Charset;
 
+import io.helidon.common.Builder;
+
 /**
- *
- * @author rgrecour
+ * Class BodyPartHeaders.
  */
-public interface BodyPartHeaders {
+public class BodyPartHeaders {
 
-    /**
-     * Get the body part name specified in the {@code Content-Disposition}
-     * body part header.
-     * @return the body part name
-     */
-    String name();
+    private final String name;
+    private final String filename;
+    private final String contentType;
+    private final String contentTransferEncoding;
+    private final Charset charset;
+    private final long size;
 
-    /**
-     * Get the body part filename specified in the {@code Content-Disposition}
-     * body part header.
-     * @return the body part filename
-     */
-    String filename();
+    BodyPartHeaders(String name, String filename, String contentType,
+                    String contentTransferEncoding, Charset charset, long size) {
+        this.name = name;
+        this.filename = filename;
+        this.contentType = contentType;
+        this.contentTransferEncoding = contentTransferEncoding;
+        this.charset = charset;
+        this.size = size;
+    }
 
-    /**
-     * Get the body part content type specified in the {@code Content-Type} body
-     * part header.
-     * @return the body part content type
-     */
-    String contentType();
+    public boolean hasContentType() {
+        return contentType != null;
+    }
 
-    /**
-     * Get the value of the {@code Content-Transfer-Encoding} body part header.
-     * @return the body part content transfert encoding
-     */
-    String contentTransferEncoding();
+    public String name() {
+        return name;
+    }
 
-    /**
-     * Get the value of the {@code charset} body part header.
-     * @return the body part charset
-     */
-    Charset charset();
+    public String filename() {
+        return filename;
+    }
 
-    /**
-     * Get the value of the {@code Content-Length} body part header.
-     * @return the body part content length
-     */
-    long size();
+    public String contentType() {
+        return contentType;
+    }
 
+    public String contentTransferEncoding() {
+        return contentTransferEncoding;
+    }
+
+    public Charset charset() {
+        return charset;
+    }
+
+    public long size() {
+        return size;
+    }
+
+    public boolean hasParameters() {
+        return name != null || filename != null || size > 0L;
+    }
+
+    public static BodyPartHeaderBuilder builder() {
+        return new BodyPartHeaderBuilder();
+    }
+
+    public static class BodyPartHeaderBuilder implements Builder<BodyPartHeaders> {
+
+        private String name;
+        private String filename;
+        private String contentType;
+        private String contentTransferEncoding;
+        private Charset charset;
+        private long size;
+
+        @Override
+        public BodyPartHeaders build() {
+            return new BodyPartHeaders(name, filename, contentType, contentTransferEncoding, charset, size);
+        }
+
+        public BodyPartHeaderBuilder name(String name) {
+            this.name = name;
+            return this;
+        }
+
+        public BodyPartHeaderBuilder filename(String filename) {
+            this.filename = filename;
+            return this;
+        }
+
+        public BodyPartHeaderBuilder contentType(String contentType) {
+            this.contentType = contentType;
+            return this;
+        }
+
+        public BodyPartHeaderBuilder contentType(MediaType contentType) {
+            this.contentType = contentType.toString();
+            return this;
+        }
+
+        public BodyPartHeaderBuilder contentTransferEncoding(String contentTransferEncoding) {
+            this.contentTransferEncoding = contentTransferEncoding;
+            return this;
+        }
+
+        public BodyPartHeaderBuilder charset(Charset charset) {
+            this.charset = charset;
+            return this;
+        }
+
+        public BodyPartHeaderBuilder size(long size) {
+            this.size = size;
+            return this;
+        }
+    }
 }

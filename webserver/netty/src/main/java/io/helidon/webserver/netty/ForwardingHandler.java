@@ -98,7 +98,7 @@ public class ForwardingHandler extends SimpleChannelInboundHandler<Object> {
             HttpRequest request = (HttpRequest) msg;
 
             // XXX MULTIPART
-            if(HttpPostMultipartRequestDecoder.isMultipart(request)){
+            if (HttpPostMultipartRequestDecoder.isMultipart(request)){
                 multipartDecoder = new HttpPostMultipartRequestDecoder(request);
             }
 

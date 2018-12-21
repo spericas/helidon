@@ -13,9 +13,14 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package io.helidon.webserver.multipart;
 
+import java.util.ArrayList;
+import java.util.List;
+
 import io.helidon.common.Builder;
+import io.helidon.common.http.BodyPartHeaders;
 import io.helidon.common.http.DataChunk;
 import io.helidon.common.http.MultiPartDataChunk;
 import io.helidon.common.reactive.Flow;
@@ -24,28 +29,46 @@ import io.helidon.webserver.ServerResponse;
 
 public final class MultiPart implements Flow.Publisher<BodyPart> {
 
-    private final ServerRequest request;
-    private final ServerResponse response;
-    private final BodyPartProcessor processor;
-    private final Flow.Publisher<DataChunk> originPublisher;
+    private ServerRequest request;
+    private ServerResponse response;
+    private BodyPartProcessor processor;
+    private Flow.Publisher<DataChunk> originPublisher;
     private BodyPart currentBodyPart;
     private Flow.Subscriber<? super BodyPart> subscriber;
 
+    private List<BodyPart> bodyParts;
+
     /**
-     * Create a new multipart entity.
+     * Create a new multipart entity for writing.
+     *
+     * @param bodyParts List of body parts.
+     */
+    MultiPart(List<BodyPart> bodyParts) {
+        this.bodyParts = bodyParts;
+    }
+
+    /**
+     * Create a new multipart entity for reading.
      *
      * @param request the server request
      * @param response the server response
-     * @param originPublisher the original publisher (request content)
+     * @param originPublisher the original publisher (request entity)
      */
-    MultiPart(final ServerRequest request,
-              final ServerResponse response,
-              final Flow.Publisher<DataChunk> originPublisher) {
+    MultiPart(ServerRequest request, ServerResponse response, Flow.Publisher<DataChunk> originPublisher) {
         this.request = request;
         this.response = response;
         this.originPublisher = originPublisher;
         this.processor = new BodyPartProcessor(this);
         originPublisher.subscribe(processor);
+    }
+
+    /**
+     * Get body parts.
+     *
+     * @return List of body parts.
+     */
+    public List<BodyPart> bodyParts() {
+        return bodyParts;
     }
 
     @Override
@@ -88,12 +111,12 @@ public final class MultiPart implements Flow.Publisher<BodyPart> {
      * will be canceled first and the processor (re)subscribed to the
      * original publisher.
      */
-    void setupNextBodyPart() {
+    void setupNextBodyPart(BodyPartHeaders headers) {
         if (currentBodyPart != null) {
             currentBodyPart.cancelSubscription();
             originPublisher.subscribe(processor);
         }
-        currentBodyPart = new BodyPart(this);
+        currentBodyPart = new BodyPart(this, headers);
         processor.subscribe(currentBodyPart);
     }
 
@@ -120,17 +143,15 @@ public final class MultiPart implements Flow.Publisher<BodyPart> {
      */
     public static class MultiPartBuilder implements Builder<MultiPart> {
 
-        @Override
-        public MultiPart build() {
-            return null;
-        }
+        private List<BodyPart> bodyParts = new ArrayList<>();
 
         @Override
-        public MultiPart get() {
-            return null;
+        public MultiPart build() {
+            return new MultiPart(bodyParts);
         }
 
         public MultiPartBuilder bodyPart(BodyPart bodyPart) {
+            bodyParts.add(bodyPart);
             return this;
         }
     }
@@ -189,7 +210,7 @@ public final class MultiPart implements Flow.Publisher<BodyPart> {
                 MultiPartDataChunk chunk = (MultiPartDataChunk) item;
                 if (firstChunk == null) {
                     firstChunk = chunk;
-                    multiPart.setupNextBodyPart();
+                    multiPart.setupNextBodyPart(((MultiPartDataChunk) item).headers());
                     multiPart.onNewBodyPart();
                 } else {
                     submitChunk(chunk);

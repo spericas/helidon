@@ -241,7 +241,7 @@ public class ResponseTest {
         }
 
         @Override
-        SpanContext spanContext() {
+        protected SpanContext spanContext() {
             return null;
         }
     }

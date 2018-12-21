@@ -12,8 +12,6 @@ import io.helidon.webserver.ServerResponse;
 
 /**
  * Class BodyPart.
- *
- * @author Santiago Pericas-Geertsen
  */
 public class BodyPart implements Flow.Subscriber<MultiPartDataChunk>, Flow.Publisher<DataChunk> {
 
@@ -21,17 +19,25 @@ public class BodyPart implements Flow.Subscriber<MultiPartDataChunk>, Flow.Publi
     private Content content;
     private BodyPartSubscription subscription = null;
     private Flow.Subscriber<? super DataChunk> subscriber = null;
-    private BodyPartHeaders headers = null;
+    private BodyPartHeaders headers;
     private boolean complete = false;
 
-    public BodyPart() {
+    private Object entity;
+
+    BodyPart(BodyPartHeaders headers, Object entity) {
+        if (entity == null) {
+            throw new IllegalStateException("Entity cannot be null");
+        }
+        this.headers = headers;
+        this.entity = entity;
     }
 
-    BodyPart(MultiPart parent) {
+    BodyPart(MultiPart parent, BodyPartHeaders headers) {
         if (parent == null) {
             throw new IllegalArgumentException("Parent cannot be null");
         }
         this.parent = parent;
+        this.headers = headers;
         this.content = new Request.Content(
                 (Request) parent.request(), this);
     }
@@ -54,6 +60,10 @@ public class BodyPart implements Flow.Subscriber<MultiPartDataChunk>, Flow.Publi
 
     public Content content() {
         return content;
+    }
+
+    public Object entity() {
+        return entity;
     }
 
     @Override
@@ -173,20 +183,28 @@ public class BodyPart implements Flow.Subscriber<MultiPartDataChunk>, Flow.Publi
      */
     public static class BodyPartBuilder implements Builder<BodyPart> {
 
-        @Override
-        public BodyPart build() {
-            return null;
-        }
+        private Object entity;
+        private BodyPartHeaders headers;
 
         @Override
-        public BodyPart get() {
-            return null;
+        public BodyPart build() {
+            return new BodyPart(headers, entity);
+        }
+
+        public BodyPartBuilder entity(Object entity) {
+            this.entity = entity;
+            return this;
+        }
+
+        public BodyPartBuilder headers(BodyPartHeaders headers) {
+            this.headers = headers;
+            return this;
         }
     }
 
     /**
      * A delegated subscription used to send the (cached) first chunk when
-     * the content subscriber has requested data.
+     * the entity subscriber has requested data.
      * It keeps the count of requested and delivered items in order to indicate
      * if there are more items to be delivered, see {@link #hasUndelivered()},
      * {@link #onDelivered().
