@@ -20,7 +20,7 @@ import java.lang.reflect.Method;
 import javax.annotation.security.PermitAll;
 
 import io.helidon.config.Config;
-import io.helidon.security.jersey.spi.AnnotationAnalyzer;
+import io.helidon.security.integration.jersey.spi.AnnotationAnalyzer;
 
 import org.eclipse.microprofile.auth.LoginConfig;
 
@@ -42,13 +42,13 @@ public class JwtAuthAnnotationAnalyzer implements AnnotationAnalyzer {
     @Override
     public void init(Config config) {
         config.get(PROVIDER_NAME + ".auth-method-mapping")
-                .asOptionalNodeList()
+                .asNodeList()
                 .ifPresent(nl -> {
                     nl.forEach(conf -> {
-                        conf.get("key").value().ifPresent(key -> {
+                        conf.get("key").asString().ifPresent(key -> {
                             if (LOGIN_CONFIG_METHOD.equals(key)) {
                                 authenticator = conf.get("provider")
-                                        .value()
+                                        .asString()
                                         .orElse(authenticator);
                             }
                         });

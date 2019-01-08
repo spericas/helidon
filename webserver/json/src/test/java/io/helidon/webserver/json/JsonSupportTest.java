@@ -32,7 +32,8 @@ import io.helidon.webserver.testsupport.TestResponse;
 
 import org.junit.jupiter.api.Test;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.hamcrest.CoreMatchers.is;
+import static org.hamcrest.MatcherAssert.assertThat;
 
 /**
  * Tests {@link JsonSupport}.
@@ -50,51 +51,51 @@ public class JsonSupportTest {
     public void pingPong() throws Exception {
         Routing routing = Routing.builder()
                                  .register(JsonSupport.get())
-                                 .post("/foo", Handler.of(JsonObject.class, (req, res, json) -> res.send(json)))
+                                 .post("/foo", Handler.create(JsonObject.class, (req, res, json) -> res.send(json)))
                                  .build();
         JsonObject json = createJson();
         TestResponse response = TestClient.create(routing)
                                           .path("/foo")
                                           .post(MediaPublisher
-                                                        .of(MediaType.APPLICATION_JSON.withCharset("UTF-8"), json.toString()));
+                                                        .create(MediaType.APPLICATION_JSON.withCharset("UTF-8"), json.toString()));
 
-        assertEquals(MediaType.APPLICATION_JSON.toString(), response.headers().first(Http.Header.CONTENT_TYPE).orElse(null));
+        assertThat(response.headers().first(Http.Header.CONTENT_TYPE).orElse(null), is(MediaType.APPLICATION_JSON.toString()));
         byte[] bytes = response.asBytes().toCompletableFuture().get(10, TimeUnit.SECONDS);
         JsonObject json2 = Json.createReader(new ByteArrayInputStream(bytes)).readObject();
-        assertEquals(json, json2);
+        assertThat(json2, is(json));
     }
 
     @Test
     public void invalidJson() throws Exception {
         Routing routing = Routing.builder()
                 .register(JsonSupport.get())
-                .post("/foo", Handler.of(JsonObject.class, (req, res, json) -> res.send(json)))
+                .post("/foo", Handler.create(JsonObject.class, (req, res, json) -> res.send(json)))
                 .build();
         TestResponse response = TestClient.create(routing)
                 .path("/foo")
-                .post(MediaPublisher.of(MediaType.APPLICATION_JSON.withCharset("UTF-8"), "{ ... invalid ... }"));
+                .post(MediaPublisher.create(MediaType.APPLICATION_JSON.withCharset("UTF-8"), "{ ... invalid ... }"));
 
-        assertEquals(Http.Status.INTERNAL_SERVER_ERROR_500, response.status());
+        assertThat(response.status(), is(Http.Status.INTERNAL_SERVER_ERROR_500));
     }
 
     @Test
     public void explicitJsonSupportRegistrationMissingJsonProperty() throws Exception {
         Routing routing = Routing.builder()
-                .post("/foo", Handler.of(JsonObject.class, (req, res, json) -> res.send(json)))
+                .post("/foo", Handler.create(JsonObject.class, (req, res, json) -> res.send(json)))
                 .build();
         JsonObject json = createJson();
         TestResponse response = TestClient.create(routing)
                 .path("/foo")
-                .post(MediaPublisher.of(MediaType.APPLICATION_JSON.withCharset("UTF-8"), json.toString()));
+                .post(MediaPublisher.create(MediaType.APPLICATION_JSON.withCharset("UTF-8"), json.toString()));
 
-        assertEquals(Http.Status.INTERNAL_SERVER_ERROR_500, response.status());
+        assertThat(response.status(), is(Http.Status.INTERNAL_SERVER_ERROR_500));
     }
 
     @Test
     public void acceptHeaders() throws Exception {
         Routing routing = Routing.builder()
                 .register(JsonSupport.get())
-                .post("/foo", Handler.of(JsonObject.class, (req, res, json) -> res.send(json)))
+                .post("/foo", Handler.create(JsonObject.class, (req, res, json) -> res.send(json)))
                 .build();
         JsonObject json = createJson();
 
@@ -102,40 +103,40 @@ public class JsonSupportTest {
         TestResponse response = TestClient.create(routing)
                 .path("/foo")
                 .header("Accept", "text/plain; q=.8, application/json; q=.1")
-                .post(MediaPublisher.of(MediaType.APPLICATION_JSON.withCharset("UTF-8"), json.toString()));
-        assertEquals(Http.Status.OK_200, response.status());
-        assertEquals(MediaType.APPLICATION_JSON.toString(), response.headers().first(Http.Header.CONTENT_TYPE).orElse(null));
+                .post(MediaPublisher.create(MediaType.APPLICATION_JSON.withCharset("UTF-8"), json.toString()));
+        assertThat(response.status(), is(Http.Status.OK_200));
+        assertThat(response.headers().first(Http.Header.CONTENT_TYPE).orElse(null), is(MediaType.APPLICATION_JSON.toString()));
 
         // Has accept with +json
         response = TestClient.create(routing)
                 .path("/foo")
                 .header("Accept", "text/plain; q=.8, application/specific+json; q=.1")
-                .post(MediaPublisher.of(MediaType.APPLICATION_JSON.withCharset("UTF-8"), json.toString()));
-        assertEquals(Http.Status.OK_200, response.status());
-        assertEquals(MediaType.parse("application/specific+json").toString(),
-                     response.headers().first(Http.Header.CONTENT_TYPE).orElse(null));
+                .post(MediaPublisher.create(MediaType.APPLICATION_JSON.withCharset("UTF-8"), json.toString()));
+        assertThat(response.status(), is(Http.Status.OK_200));
+        assertThat(response.headers().first(Http.Header.CONTENT_TYPE).orElse(null),
+                   is(MediaType.parse("application/specific+json").toString()));
 
         // With start
         response = TestClient.create(routing)
                 .path("/foo")
                 .header("Accept", "text/plain; q=.8, application/*; q=.1")
-                .post(MediaPublisher.of(MediaType.APPLICATION_JSON.withCharset("UTF-8"), json.toString()));
-        assertEquals(Http.Status.OK_200, response.status());
-        assertEquals(MediaType.APPLICATION_JSON.toString(), response.headers().first(Http.Header.CONTENT_TYPE).orElse(null));
+                .post(MediaPublisher.create(MediaType.APPLICATION_JSON.withCharset("UTF-8"), json.toString()));
+        assertThat(response.status(), is(Http.Status.OK_200));
+        assertThat(response.headers().first(Http.Header.CONTENT_TYPE).orElse(null), is(MediaType.APPLICATION_JSON.toString()));
 
         // With JOSNP standard application/javascript
         response = TestClient.create(routing)
                 .path("/foo")
                 .header("Accept", "application/javascript")
-                .post(MediaPublisher.of(MediaType.APPLICATION_JSON.withCharset("UTF-8"), json.toString()));
-        assertEquals(Http.Status.OK_200, response.status());
-        assertEquals("application/javascript", response.headers().first(Http.Header.CONTENT_TYPE).orElse(null));
+                .post(MediaPublisher.create(MediaType.APPLICATION_JSON.withCharset("UTF-8"), json.toString()));
+        assertThat(response.status(), is(Http.Status.OK_200));
+        assertThat(response.headers().first(Http.Header.CONTENT_TYPE).orElse(null), is("application/javascript"));
 
         // Without start
         response = TestClient.create(routing)
                 .path("/foo")
                 .header("Accept", "text/plain; q=.8, application/specific; q=.1")
-                .post(MediaPublisher.of(MediaType.APPLICATION_JSON.withCharset("UTF-8"), json.toString()));
-        assertEquals(Http.Status.INTERNAL_SERVER_ERROR_500, response.status());
+                .post(MediaPublisher.create(MediaType.APPLICATION_JSON.withCharset("UTF-8"), json.toString()));
+        assertThat(response.status(), is(Http.Status.INTERNAL_SERVER_ERROR_500));
     }
 }

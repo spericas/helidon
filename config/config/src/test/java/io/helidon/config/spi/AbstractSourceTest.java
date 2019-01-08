@@ -29,11 +29,12 @@ import io.helidon.config.ConfigException;
 import io.helidon.config.ConfigSources;
 import io.helidon.config.PollingStrategies;
 
+import org.junit.jupiter.api.Test;
+
 import static org.hamcrest.CoreMatchers.not;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.instanceOf;
 import static org.hamcrest.Matchers.is;
-import org.junit.jupiter.api.Test;
 
 /**
  * Tests {@link AbstractSource}.
@@ -129,18 +130,23 @@ public class AbstractSourceTest {
 
     @Test
     public void testInitAll() {
-        TestingSource.TestingBuilder builder = TestingSource.builder().init(Config.from(ConfigSources.from(
-                CollectionsHelper.mapOf("optional", "true",
-                       "polling-strategy.class", TestingPollingStrategy.class.getName(),
-                       "retry-policy.class", TestingRetryPolicy.class.getName()
-                ))));
+        TestingSource.TestingBuilder builder = TestingSource.builder().init(
+                Config.builder(ConfigSources.create(
+                        CollectionsHelper.mapOf("optional", "true",
+                                                "polling-strategy.class", TestingPollingStrategy.class.getName(),
+                                                "retry-policy.class", TestingRetryPolicy.class.getName()
+                        )))
+                        .addMapper(TestingRetryPolicy.class, config -> new TestingRetryPolicy())
+                        .addMapper(TestingPollingStrategy.class, config -> new TestingPollingStrategy())
+                        .build()
+        );
 
         //optional
         assertThat(builder.isMandatory(), is(false));
         //polling-strategy
-        assertThat(builder.getPollingStrategy(), is(instanceOf(TestingPollingStrategy.class)));
+        assertThat(builder.pollingStrategy(), is(instanceOf(TestingPollingStrategy.class)));
         //retry-policy
-        assertThat(builder.getRetryPolicy(), is(instanceOf(TestingRetryPolicy.class)));
+        assertThat(builder.retryPolicy(), is(instanceOf(TestingRetryPolicy.class)));
     }
 
     @Test
@@ -150,7 +156,7 @@ public class AbstractSourceTest {
         //optional
         assertThat(builder.isMandatory(), is(true));
         //polling-strategy
-        assertThat(builder.getPollingStrategy(), is(PollingStrategies.nop()));
+        assertThat(builder.pollingStrategy(), is(PollingStrategies.nop()));
     }
 
     private static class TestingSource extends AbstractSource<String, Instant> {

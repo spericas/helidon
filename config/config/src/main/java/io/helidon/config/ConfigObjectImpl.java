@@ -39,18 +39,19 @@ class ConfigObjectImpl extends ConfigComplexImpl<ObjectNode> {
     }
 
     @Override
-    public Optional<List<Config>> nodeList() {
-        return Optional.of(
-                getNode().entrySet()
-                        .stream()
-                        .map(e -> get(e.getKey()))
-                        .collect(Collectors.toList())
-        );
+    public ConfigValue<List<Config>> asNodeList() throws ConfigMappingException {
+        return ConfigValues.create(this,
+                                   () -> Optional.of(
+                                           node().entrySet()
+                                                   .stream()
+                                                   .map(e -> get(e.getKey()))
+                                                   .collect(Collectors.toList())),
+                                   Config::asNodeList);
     }
 
     @Override
     public String toString() {
-        return "[" + realKey() + "] OBJECT (members: " + getNode().size() + ")";
+        return "[" + realKey() + "] OBJECT (members: " + node().size() + ")";
     }
 
 }

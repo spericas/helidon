@@ -27,7 +27,7 @@
         <version>0.11.0-SNAPSHOT</version>
     </parent>
     <artifactId>helidon-security</artifactId>
-    <name>Helidon Security Core</name>
+    <name>Helidon Security</name>
 
     <properties>
         <spotbugs.exclude>etc/spotbugs/exclude.xml</spotbugs.exclude>
@@ -55,10 +55,6 @@
             <version>${project.version}</version>
         </dependency>
         <dependency>
-            <groupId>javax.annotation</groupId>
-            <artifactId>javax.annotation-api</artifactId>
-        </dependency>
-        <dependency>
             <groupId>io.helidon.config</groupId>
             <artifactId>helidon-config</artifactId>
             <version>${project.version}</version>
@@ -68,8 +64,8 @@
             <artifactId>opentracing-util</artifactId>
         </dependency>
         <dependency>
-            <groupId>io.helidon.config</groupId>
-            <artifactId>helidon-config-bundle</artifactId>
+            <groupId>io.helidon.bundles</groupId>
+            <artifactId>helidon-bundles-config</artifactId>
             <version>${project.version}</version>
             <scope>test</scope>
         </dependency>

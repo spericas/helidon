@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2018 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2017, 2019 Oracle and/or its affiliates. All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -34,6 +34,7 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 import io.helidon.common.OptionalHelper;
+import io.helidon.config.Config;
 import io.helidon.config.ConfigException;
 import io.helidon.config.ConfigHelper;
 import io.helidon.config.internal.FileSourceHelper;
@@ -50,8 +51,6 @@ import org.eclipse.jgit.api.errors.JGitInternalException;
 import org.eclipse.jgit.lib.Repository;
 import org.eclipse.jgit.storage.file.FileRepositoryBuilder;
 
-import static io.helidon.config.internal.FileSourceHelper.digest;
-
 import static java.util.Collections.singleton;
 
 /**
@@ -59,7 +58,7 @@ import static java.util.Collections.singleton;
  * <p>
  * Config source is initialized by {@link GitConfigSourceBuilder}.
  */
-class GitConfigSource extends AbstractParsableConfigSource<byte[]> {
+public class GitConfigSource extends AbstractParsableConfigSource<byte[]> {
 
     private static final Logger LOGGER = Logger.getLogger(GitConfigSource.class.getName());
 
@@ -77,6 +76,16 @@ class GitConfigSource extends AbstractParsableConfigSource<byte[]> {
     private final List<Git> gits = Collections.synchronizedList(new ArrayList<>());
 
     /**
+     * Create an instance from meta configuration.
+     *
+     * @param config meta configuration of this source
+     * @return config source configured from the meta configuration
+     */
+    public static GitConfigSource create(Config config) {
+        return GitConfigSourceBuilder.create(config).build();
+    }
+
+    /**
      * Initializes config source from builder.
      *
      * @param builder builder to be initialized from
@@ -85,9 +94,9 @@ class GitConfigSource extends AbstractParsableConfigSource<byte[]> {
         super(builder);
 
         this.endpoint = endpoint;
-        this.uri = endpoint.getUri();
-        this.branch = endpoint.getBranch();
-        if (endpoint.getDirectory() == null) {
+        this.uri = endpoint.uri();
+        this.branch = endpoint.branch();
+        if (endpoint.directory() == null) {
             if (uri == null) {
                 throw new ConfigException("Directory or Uri must be set.");
             }
@@ -98,12 +107,12 @@ class GitConfigSource extends AbstractParsableConfigSource<byte[]> {
                 throw new ConfigException("Cannot create temporary directory.", e);
             }
         } else {
-            this.directory = endpoint.getDirectory();
+            this.directory = endpoint.directory();
         }
 
         try {
             init();
-            targetPath = directory.resolve(endpoint.getPath());
+            targetPath = directory.resolve(endpoint.path());
         } catch (IOException | GitAPIException | JGitInternalException e) {
             throw new ConfigException(String.format("Cannot initialize repository '%s' in local temp dir %s",
                                                     uri.toASCIIString(),
@@ -178,23 +187,23 @@ class GitConfigSource extends AbstractParsableConfigSource<byte[]> {
     @Override
     protected String uid() {
         StringBuilder sb = new StringBuilder();
-        if (endpoint.getDirectory() != null) {
-            sb.append(endpoint.getDirectory());
+        if (endpoint.directory() != null) {
+            sb.append(endpoint.directory());
         }
-        if (endpoint.getUri() != null && endpoint.getDirectory() != null) {
+        if (endpoint.uri() != null && endpoint.directory() != null) {
             sb.append('|');
         }
-        if (endpoint.getUri() != null) {
-            sb.append(endpoint.getUri().toASCIIString());
+        if (endpoint.uri() != null) {
+            sb.append(endpoint.uri().toASCIIString());
         }
         sb.append('#');
-        sb.append(endpoint.getPath());
+        sb.append(endpoint.path());
         return sb.toString();
     }
 
     @Override
-    protected String getMediaType() {
-        return OptionalHelper.from(Optional.ofNullable(super.getMediaType()))
+    protected String mediaType() {
+        return OptionalHelper.from(Optional.ofNullable(super.mediaType()))
                 .or(this::probeContentType)
                 .asOptional()
                 .orElse(null);
@@ -211,25 +220,26 @@ class GitConfigSource extends AbstractParsableConfigSource<byte[]> {
         } catch (GitAPIException e) {
             LOGGER.log(Level.WARNING, "Pull failed.", e);
         }
-        return Optional.ofNullable(digest(targetPath));
+        return Optional.ofNullable(FileSourceHelper.digest(targetPath));
     }
 
-    private Instant getLastModifiedTime(Path path) {
+    private Instant lastModifiedTime(Path path) {
         return FileSourceHelper.lastModifiedTime(path);
     }
 
     @Override
     protected ConfigParser.Content<byte[]> content() throws ConfigException {
-        Instant lastModifiedTime = getLastModifiedTime(targetPath);
+        Instant lastModifiedTime = lastModifiedTime(targetPath);
         LOGGER.log(Level.FINE, String.format("Getting content from '%s'. Last stamp is %s.", targetPath, lastModifiedTime));
 
         LOGGER.finest(FileSourceHelper.safeReadContent(targetPath));
-        return ConfigParser.Content.from(new StringReader(FileSourceHelper.safeReadContent(targetPath)),
-                                         getMediaType(),
-                                         dataStamp());
+        Optional<byte[]> stamp = dataStamp();
+        return ConfigParser.Content.create(new StringReader(FileSourceHelper.safeReadContent(targetPath)),
+                                           mediaType(),
+                                           stamp);
     }
 
-    GitConfigSourceBuilder.GitEndpoint getGitEndpoint() {
+    GitConfigSourceBuilder.GitEndpoint gitEndpoint() {
         return endpoint;
     }
 
@@ -239,9 +249,12 @@ class GitConfigSource extends AbstractParsableConfigSource<byte[]> {
     }
 
     @Override
-    public void close() throws Exception {
+    public void close() throws IOException {
         if (!isClosed) {
             try {
+                if (repository != null) {
+                    repository.close();
+                }
                 closeGits();
                 if (isTempDirectory) {
                     deleteTempDirectory();
@@ -253,7 +266,7 @@ class GitConfigSource extends AbstractParsableConfigSource<byte[]> {
     }
 
     private void closeGits() {
-        gits.forEach(git -> git.close());
+        gits.forEach(Git::close);
     }
 
     private void deleteTempDirectory() throws IOException {
@@ -261,6 +274,12 @@ class GitConfigSource extends AbstractParsableConfigSource<byte[]> {
         Files.walkFileTree(directory, new SimpleFileVisitor<Path>() {
             @Override
             public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
+                if (!Files.isWritable(file)) {
+                    //When you try to delete the file on Windows and it is marked as read-only
+                    //it would fail unless this change
+                    file.toFile().setWritable(true);
+                }
+
                 Files.delete(file);
                 return FileVisitResult.CONTINUE;
             }

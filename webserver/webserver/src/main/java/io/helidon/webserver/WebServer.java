@@ -22,6 +22,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.ServiceLoader;
 import java.util.concurrent.CompletionStage;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 import io.helidon.common.http.ContextualRegistry;
@@ -115,8 +116,8 @@ public interface WebServer {
      * @throws IllegalStateException if none SPI implementation found
      * @throws NullPointerException if 'routing' parameter is {@code null}
      */
-    static WebServer create(io.helidon.common.Builder<? extends ServerConfiguration> configurationBuilder, Routing routing) {
-        return create(configurationBuilder != null ? configurationBuilder.build() : null, routing);
+    static WebServer create(Supplier<? extends ServerConfiguration> configurationBuilder, Routing routing) {
+        return create(configurationBuilder != null ? configurationBuilder.get() : null, routing);
     }
 
     /**
@@ -129,10 +130,10 @@ public interface WebServer {
      * @throws IllegalStateException if none SPI implementation found
      * @throws NullPointerException  if 'routingBuilder' parameter is {@code null}
      */
-    static WebServer create(io.helidon.common.Builder<? extends ServerConfiguration> configurationBuilder,
-                            io.helidon.common.Builder<? extends Routing> routingBuilder) {
+    static WebServer create(Supplier<? extends ServerConfiguration> configurationBuilder,
+                            Supplier<? extends Routing> routingBuilder) {
         Objects.requireNonNull(routingBuilder, "Parameter 'routingBuilder' must not be null!");
-        return create(configurationBuilder != null ? configurationBuilder.build() : null, routingBuilder.build());
+        return create(configurationBuilder != null ? configurationBuilder.get() : null, routingBuilder.get());
     }
 
     /**
@@ -145,9 +146,9 @@ public interface WebServer {
      * @throws NullPointerException  if 'routingBuilder' parameter is {@code null}
      */
     static WebServer create(ServerConfiguration configuration,
-                            io.helidon.common.Builder<? extends Routing> routingBuilder) {
+                            Supplier<? extends Routing> routingBuilder) {
         Objects.requireNonNull(routingBuilder, "Parameter 'routingBuilder' must not be null!");
-        return create(configuration, routingBuilder.build());
+        return create(configuration, routingBuilder.get());
     }
 
     /**
@@ -174,7 +175,7 @@ public interface WebServer {
     static WebServer create(ServerConfiguration configuration, Routing routing) {
         Objects.requireNonNull(routing, "Parameter 'routing' is null!");
 
-        return builder(routing).configuration(configuration)
+        return builder(routing).config(configuration)
                                .build();
     }
 
@@ -187,9 +188,9 @@ public interface WebServer {
      * @throws IllegalStateException if none SPI implementation found
      * @throws NullPointerException  if 'routing' parameter is {@code null}
      */
-    static WebServer create(io.helidon.common.Builder<? extends Routing> routingBuilder) {
+    static WebServer create(Supplier<? extends Routing> routingBuilder) {
         Objects.requireNonNull(routingBuilder, "Parameter 'routingBuilder' must not be null!");
-        return create(routingBuilder.build());
+        return create(routingBuilder.get());
     }
 
     /**
@@ -198,9 +199,9 @@ public interface WebServer {
      * @param routingBuilder the routing builder; must not be {@code null}
      * @return the builder
      */
-    static Builder builder(io.helidon.common.Builder<? extends Routing> routingBuilder) {
+    static Builder builder(Supplier<? extends Routing> routingBuilder) {
         Objects.requireNonNull(routingBuilder, "Parameter 'routingBuilder' must not be null!");
-        return builder(routingBuilder.build());
+        return builder(routingBuilder.get());
     }
 
     /**
@@ -236,7 +237,7 @@ public interface WebServer {
          * @param configuration the configuration
          * @return an updated builder
          */
-        public Builder configuration(ServerConfiguration configuration) {
+        public Builder config(ServerConfiguration configuration) {
             this.configuration = configuration;
             return this;
         }
@@ -247,8 +248,8 @@ public interface WebServer {
          * @param configurationBuilder the configuration builder
          * @return an updated builder
          */
-        public Builder configuration(io.helidon.common.Builder<ServerConfiguration> configurationBuilder) {
-            this.configuration = configurationBuilder != null ? configurationBuilder.build() : null;
+        public Builder config(Supplier<ServerConfiguration> configurationBuilder) {
+            this.configuration = configurationBuilder != null ? configurationBuilder.get() : null;
             return this;
         }
 
@@ -286,11 +287,11 @@ public interface WebServer {
          *                       configuration; will be built as a first step of this method execution
          * @return an updated builder
          */
-        public Builder addNamedRouting(String name, io.helidon.common.Builder<Routing> routingBuilder) {
+        public Builder addNamedRouting(String name, Supplier<Routing> routingBuilder) {
             Objects.requireNonNull(name, "Parameter 'name' must not be null!");
             Objects.requireNonNull(routingBuilder, "Parameter 'routingBuilder' must not be null!");
 
-            return addNamedRouting(name, routingBuilder.build());
+            return addNamedRouting(name, routingBuilder.get());
         }
 
         /**

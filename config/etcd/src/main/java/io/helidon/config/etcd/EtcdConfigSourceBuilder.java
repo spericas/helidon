@@ -24,6 +24,9 @@ import io.helidon.config.ConfigException;
 import io.helidon.config.ConfigMappingException;
 import io.helidon.config.MissingValueException;
 import io.helidon.config.etcd.EtcdConfigSourceBuilder.EtcdEndpoint;
+import io.helidon.config.etcd.internal.client.EtcdClientFactory;
+import io.helidon.config.etcd.internal.client.v2.EtcdV2ClientFactory;
+import io.helidon.config.etcd.internal.client.v3.EtcdV3ClientFactory;
 import io.helidon.config.spi.AbstractParsableConfigSource;
 import io.helidon.config.spi.ConfigParser;
 import io.helidon.config.spi.ConfigSource;
@@ -73,9 +76,9 @@ public final class EtcdConfigSourceBuilder
      * @param key an Etcd key with which the value containing the configuration is associated.
      * @param api an Etcd API version.
      * @return new instance of builder
-     * @see #from(Config)
+     * @see #create(Config)
      */
-    public static EtcdConfigSourceBuilder from(URI uri, String key, EtcdApi api) {
+    public static EtcdConfigSourceBuilder create(URI uri, String key, EtcdApi api) {
         return new EtcdConfigSourceBuilder(uri, key, api);
     }
 
@@ -83,7 +86,7 @@ public final class EtcdConfigSourceBuilder
      * Initializes config source instance from meta configuration properties,
      * see {@link io.helidon.config.ConfigSources#load(Config)}.
      * <p>
-     * Mandatory {@code properties}, see {@link #from(URI, String, EtcdApi)}:
+     * Mandatory {@code properties}, see {@link #create(URI, String, EtcdApi)}:
      * <ul>
      * <li>{@code uri} - type {@link URI}</li>
      * <li>{@code key} - type {@code String}</li>
@@ -97,13 +100,13 @@ public final class EtcdConfigSourceBuilder
      *                                required by the mapper implementation to provide instance of Java type.
      * @throws ConfigMappingException in case the mapper fails to map the (existing) configuration tree represented by the
      *                                supplied configuration node to an instance of a given Java type.
-     * @see #from(URI, String, EtcdApi)
+     * @see #create(URI, String, EtcdApi)
      * @see #init(Config)
      */
-    public static EtcdConfigSourceBuilder from(Config metaConfig) throws ConfigMappingException, MissingValueException {
-        return EtcdConfigSourceBuilder.from(metaConfig.get(URI_KEY).as(URI.class),
-                                            metaConfig.get(KEY_KEY).asString(),
-                                            metaConfig.get(API_KEY).as(EtcdApi.class))
+    public static EtcdConfigSourceBuilder create(Config metaConfig) throws ConfigMappingException, MissingValueException {
+        return EtcdConfigSourceBuilder.create(metaConfig.get(URI_KEY).as(URI.class).get(),
+                                              metaConfig.get(KEY_KEY).asString().get(),
+                                              metaConfig.get(API_KEY).asString().as(EtcdApi::valueOf).get())
                 .init(metaConfig);
     }
 
@@ -113,12 +116,12 @@ public final class EtcdConfigSourceBuilder
     }
 
     @Override
-    protected EtcdEndpoint getTarget() {
+    protected EtcdEndpoint target() {
         return etcdEndpoint;
     }
 
-    PollingStrategy getPollingStrategyInternal() { //just for testing purposes
-        return super.getPollingStrategy();
+    PollingStrategy pollingStrategyInternal() { //just for testing purposes
+        return super.pollingStrategy();
     }
 
     /**
@@ -130,7 +133,7 @@ public final class EtcdConfigSourceBuilder
      * @return new instance of Etcd ConfigSource.
      */
     @Override
-    public ConfigSource build() {
+    public EtcdConfigSource build() {
         return new EtcdConfigSource(this);
     }
 
@@ -144,13 +147,26 @@ public final class EtcdConfigSourceBuilder
         /**
          * Etcd API v2 version.
          */
-        v2,
+        v2(new EtcdV2ClientFactory()),
 
         /**
          * Etcd API v3 version.
          */
-        v3
+        v3(new EtcdV3ClientFactory());
 
+        private final EtcdClientFactory clientFactory;
+
+        EtcdApi(EtcdClientFactory clientFactory) {
+            this.clientFactory = clientFactory;
+        }
+
+        /**
+         * The client factory for this version of etcd.
+         * @return client factory
+         */
+        public EtcdClientFactory clientFactory() {
+            return clientFactory;
+        }
     }
 
     /**
@@ -168,7 +184,7 @@ public final class EtcdConfigSourceBuilder
          * Initializes descriptor.
          *
          * @param uri an Etcd endpoint remote URI.
-         * @param key an etcd key with which the value containing the configuration is associated.
+         * @param key an Etcd key with which the value containing the configuration is associated.
          * @param api an Etcd API version.
          */
         public EtcdEndpoint(URI uri, String key, EtcdApi api) {
@@ -177,15 +193,30 @@ public final class EtcdConfigSourceBuilder
             this.api = api;
         }
 
-        public URI getUri() {
+        /**
+         * Etcd endpoint remote URI.
+         *
+         * @return endpoint URI
+         */
+        public URI uri() {
             return uri;
         }
 
-        public String getKey() {
+        /**
+         * Etcd key.
+         *
+         * @return key with configuration
+         */
+        public String key() {
             return key;
         }
 
-        public EtcdApi getApi() {
+        /**
+         * Etcd API version.
+         *
+         * @return API version
+         */
+        public EtcdApi api() {
             return api;
         }
     }

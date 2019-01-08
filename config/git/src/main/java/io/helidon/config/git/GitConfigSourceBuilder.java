@@ -23,7 +23,6 @@ import java.nio.file.attribute.FileAttribute;
 import java.util.Objects;
 
 import io.helidon.config.Config;
-import io.helidon.config.ConfigException;
 import io.helidon.config.ConfigMappingException;
 import io.helidon.config.MissingValueException;
 import io.helidon.config.spi.AbstractParsableConfigSource;
@@ -57,7 +56,7 @@ import io.helidon.config.spi.PollingStrategy;
  * If the directory nor the uri is not set, an exception is thrown.
  * <p>
  * If Git ConfigSource is {@code mandatory} and a {@code uri} is not responsive or {@code key} does not exist
- * then {@link ConfigSource#load} throws {@link ConfigException}.
+ * then {@link ConfigSource#load} throws {@link io.helidon.config.ConfigException}.
  * <p>
  * One of {@code media-type} and {@code parser} properties must be set to be clear how to parse the content. If both of them
  * are set, then {@code parser} has precedence.
@@ -87,9 +86,9 @@ public final class GitConfigSourceBuilder
      *
      * @param path a path to the configuration file
      * @return a new builder
-     * @see #from(Config)
+     * @see #create(Config)
      */
-    public static GitConfigSourceBuilder from(String path) {
+    public static GitConfigSourceBuilder create(String path) {
         return new GitConfigSourceBuilder(path);
     }
 
@@ -97,7 +96,7 @@ public final class GitConfigSourceBuilder
      * Initializes config source instance from meta configuration properties,
      * see {@link io.helidon.config.ConfigSources#load(Config)}.
      * <p>
-     * Mandatory {@code properties}, see {@link #from(String)}:
+     * Mandatory {@code properties}, see {@link #create(String)}:
      * <ul>
      * <li>{@code path} - type {@code String}</li>
      * </ul>
@@ -109,11 +108,11 @@ public final class GitConfigSourceBuilder
      *                                required by the mapper implementation to provide instance of Java type.
      * @throws ConfigMappingException in case the mapper fails to map the (existing) configuration tree represented by the
      *                                supplied configuration node to an instance of a given Java type.
-     * @see #from(String)
+     * @see #create(String)
      * @see #init(Config)
      */
-    public static GitConfigSourceBuilder from(Config metaConfig) throws ConfigMappingException, MissingValueException {
-        return GitConfigSourceBuilder.from(metaConfig.get(PATH_KEY).asString())
+    public static GitConfigSourceBuilder create(Config metaConfig) throws ConfigMappingException, MissingValueException {
+        return GitConfigSourceBuilder.create(metaConfig.get(PATH_KEY).asString().get())
                 .init(metaConfig);
     }
 
@@ -131,20 +130,20 @@ public final class GitConfigSourceBuilder
     @Override
     protected GitConfigSourceBuilder init(Config metaConfig) {
         //uri
-        metaConfig.get(URI_KEY).asOptional(URI.class)
+        metaConfig.get(URI_KEY).as(URI.class)
                 .ifPresent(this::uri);
         //branch
-        metaConfig.get(BRANCH_KEY).asOptionalString()
+        metaConfig.get(BRANCH_KEY).asString()
                 .ifPresent(this::branch);
         //directory
-        metaConfig.get(DIRECTORY_KEY).asOptional(Path.class)
+        metaConfig.get(DIRECTORY_KEY).as(Path.class)
                 .ifPresent(this::directory);
 
         return super.init(metaConfig);
     }
 
     @Override
-    protected GitEndpoint getTarget() {
+    protected GitEndpoint target() {
         return new GitEndpoint(uri, branch, directory, path);
     }
 
@@ -181,13 +180,13 @@ public final class GitConfigSourceBuilder
         return this;
     }
 
-    PollingStrategy getPollingStrategyInternal() { //just for testing purposes
-        return super.getPollingStrategy();
+    PollingStrategy pollingStrategyInternal() { //just for testing purposes
+        return super.pollingStrategy();
     }
 
     @Override
-    public ConfigSource build() {
-        return new GitConfigSource(this, getTarget());
+    public GitConfigSource build() {
+        return new GitConfigSource(this, target());
     }
 
     /**
@@ -222,7 +221,7 @@ public final class GitConfigSourceBuilder
          *
          * @return a remote git repository uri
          */
-        public URI getUri() {
+        public URI uri() {
             return uri;
         }
 
@@ -231,7 +230,7 @@ public final class GitConfigSourceBuilder
          *
          * @return a git branch
          */
-        public String getBranch() {
+        public String branch() {
             return branch;
         }
 
@@ -240,7 +239,7 @@ public final class GitConfigSourceBuilder
          *
          * @return a local git directory
          */
-        public Path getDirectory() {
+        public Path directory() {
             return directory;
         }
 
@@ -249,7 +248,7 @@ public final class GitConfigSourceBuilder
          *
          * @return a relative path to the configuration file
          */
-        public String getPath() {
+        public String path() {
             return path;
         }
     }

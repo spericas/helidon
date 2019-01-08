@@ -39,10 +39,10 @@ import org.junit.jupiter.api.Test;
 import static org.hamcrest.CoreMatchers.containsString;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.CoreMatchers.not;
+import static org.hamcrest.CoreMatchers.notNullValue;
 import static org.hamcrest.CoreMatchers.startsWith;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.collection.IsMapContaining.hasEntry;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 /**
  * The PlainTest.
@@ -78,7 +78,7 @@ public class PlainTest {
                            res.headers().put(Http.Header.TRANSFER_ENCODING, "chunked");
                            res.send("abcd");
                        })
-                       .any(Handler.of(String.class, (req, res, entity) -> res.send("It works! Payload: " + entity)))
+                       .any(Handler.create(String.class, (req, res, entity) -> res.send("It works! Payload: " + entity)))
                        .build())
                              .start()
                              .toCompletableFuture()
@@ -361,7 +361,7 @@ public class PlainTest {
     }
 
     private Map<String, String> cutHeaders(String response) {
-        assertNotNull(response);
+        assertThat(response, notNullValue());
         int index = response.indexOf("\n\n");
         if (index < 0) {
             throw new AssertionError("Missing end of headers in response!");
@@ -388,7 +388,7 @@ public class PlainTest {
     }
 
     private String cutPayloadAndCheckHeadersFormat(String response) {
-        assertNotNull(response);
+        assertThat(response, notNullValue());
         int index = response.indexOf("\n\n");
         if (index < 0) {
             throw new AssertionError("Missing end of headers in response!");

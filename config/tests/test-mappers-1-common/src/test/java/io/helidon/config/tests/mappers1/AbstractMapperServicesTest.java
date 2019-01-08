@@ -16,10 +16,10 @@
 
 package io.helidon.config.tests.mappers1;
 
-import io.helidon.common.CollectionsHelper;
 import java.util.Locale;
 import java.util.logging.Logger;
 
+import io.helidon.common.CollectionsHelper;
 import io.helidon.config.Config;
 import io.helidon.config.ConfigSources;
 
@@ -33,7 +33,7 @@ public abstract class AbstractMapperServicesTest {
 
     protected Config.Builder configBuilder() {
         return Config.builder()
-                .sources(ConfigSources.from(CollectionsHelper.mapOf(
+                .sources(ConfigSources.create(CollectionsHelper.mapOf(
                         LOGGER_KEY, this.getClass().getName(),
                         LOCALE_KEY + ".language", "cs",
                         LOCALE_KEY + ".country", "CZ",
@@ -43,13 +43,17 @@ public abstract class AbstractMapperServicesTest {
     protected Logger getLogger() {
         return configBuilder()
                 .build()
-                .get(LOGGER_KEY).as(Logger.class);
+                .get(LOGGER_KEY)
+                .as(Logger.class)
+                .get();
     }
 
     protected Locale getLocale() {
         return configBuilder()
                 .build()
-                .get(LOCALE_KEY).as(Locale.class);
+                .get(LOCALE_KEY)
+                .as(Locale.class)
+                .get();
     }
 
 }

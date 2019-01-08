@@ -94,7 +94,7 @@ public final class JsonSupport implements Service, Handler {
      * A singleton holder for JsonSupport with default (empty) configuration.
      */
     private static final class DefaultJsonSupportHolder {
-        private static final JsonSupport INTANCE = new JsonSupport(null);
+        private static final JsonSupport INSTANCE = new JsonSupport(null);
     }
 
     private final JsonReaderFactory jsonReaderFactory;
@@ -309,7 +309,7 @@ public final class JsonSupport implements Service, Handler {
      * @return a singleton instance with default configuration
      */
     public static JsonSupport get() {
-        return DefaultJsonSupportHolder.INTANCE;
+        return DefaultJsonSupportHolder.INSTANCE;
     }
 
     /**

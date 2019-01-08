@@ -22,6 +22,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.function.Supplier;
 
 import javax.net.ssl.SSLContext;
 
@@ -177,7 +178,7 @@ public interface ServerConfiguration extends SocketConfiguration {
      * @param config the externalized configuration
      * @return a new instance
      */
-    static ServerConfiguration fromConfig(Config config) {
+    static ServerConfiguration create(Config config) {
         return builder(config).build();
     }
 
@@ -232,7 +233,7 @@ public interface ServerConfiguration extends SocketConfiguration {
          * @param sslContextBuilder ssl context builder; will be built as a first step of this method execution
          * @return an updated builder
          */
-        public Builder ssl(io.helidon.common.Builder<? extends SSLContext> sslContextBuilder) {
+        public Builder ssl(Supplier<? extends SSLContext> sslContextBuilder) {
             defaultSocketBuilder.ssl(sslContextBuilder);
             return this;
         }
@@ -318,8 +319,8 @@ public interface ServerConfiguration extends SocketConfiguration {
         public Builder addSocket(String name, int port, InetAddress bindAddress) {
             Objects.requireNonNull(name, "Parameter 'name' must not be null!");
             return addSocket(name, SocketConfiguration.builder()
-                                                      .port(port)
-                                                      .bindAddress(bindAddress));
+                    .port(port)
+                    .bindAddress(bindAddress));
         }
 
         /**
@@ -351,10 +352,10 @@ public interface ServerConfiguration extends SocketConfiguration {
          *                                   a first step of this method execution
          * @return an updated builder
          */
-        public Builder addSocket(String name, io.helidon.common.Builder<SocketConfiguration> socketConfigurationBuilder) {
+        public Builder addSocket(String name, Supplier<SocketConfiguration> socketConfigurationBuilder) {
             Objects.requireNonNull(name, "Parameter 'name' must not be null!");
 
-            return addSocket(name, socketConfigurationBuilder != null ? socketConfigurationBuilder.build() : null);
+            return addSocket(name, socketConfigurationBuilder != null ? socketConfigurationBuilder.get() : null);
         }
 
         /**
@@ -388,8 +389,8 @@ public interface ServerConfiguration extends SocketConfiguration {
          * @param tracerBuilder a tracer builder to set; will be built as a first step of this method execution
          * @return updated builder
          */
-        public Builder tracer(io.helidon.common.Builder<? extends Tracer> tracerBuilder) {
-            this.tracer = tracerBuilder != null ? tracerBuilder.build() : null;
+        public Builder tracer(Supplier<? extends Tracer> tracerBuilder) {
+            this.tracer = tracerBuilder != null ? tracerBuilder.get() : null;
             return this;
         }
 
@@ -423,12 +424,12 @@ public interface ServerConfiguration extends SocketConfiguration {
             }
             configureSocket(config, defaultSocketBuilder);
 
-            config.get("workers").asOptionalInt().ifPresent(this::workersCount);
+            config.get("workers").asInt().ifPresent(this::workersCount);
 
             // sockets
             Config socketsConfig = config.get("sockets");
             if (socketsConfig.exists()) {
-                for (Config socketConfig : socketsConfig.asNodeList(CollectionsHelper.listOf())) {
+                for (Config socketConfig : socketsConfig.asNodeList().orElse(CollectionsHelper.listOf())) {
                     String socketName = socketConfig.name();
                     sockets.put(socketName, configureSocket(socketConfig, SocketConfiguration.builder()).build());
                 }
@@ -440,11 +441,9 @@ public interface ServerConfiguration extends SocketConfiguration {
                 ExperimentalConfiguration.Builder experimentalBuilder = new ExperimentalConfiguration.Builder();
                 Config http2Config = experimentalConfig.get("http2");
                 if (http2Config.exists()) {
-                    Optional<Boolean> enable = http2Config.get("enable").asOptional(Boolean.class);
-                    Optional<Integer> maxContentLength = http2Config.get("maxContentLength").asOptional(Integer.class);
                     Http2Configuration.Builder http2Builder = new Http2Configuration.Builder();
-                    enable.ifPresent(http2Builder::enable);
-                    maxContentLength.ifPresent(http2Builder::maxContentLength);
+                    http2Config.get("enable").asBoolean().ifPresent(http2Builder::enable);
+                    http2Config.get("max-content-length").asInt().ifPresent(http2Builder::maxContentLength);
                     experimentalBuilder.http2(http2Builder.build());
                 }
                 experimental = experimentalBuilder.build();
@@ -455,18 +454,20 @@ public interface ServerConfiguration extends SocketConfiguration {
 
         private SocketConfiguration.Builder configureSocket(Config config, SocketConfiguration.Builder soConfigBuilder) {
 
-            config.get("port").asOptionalInt().ifPresent(soConfigBuilder::port);
-            config.get("bind-address").asOptional(String.class).map(this::string2InetAddress)
-                  .ifPresent(soConfigBuilder::bindAddress);
-            config.get("backlog").asOptionalInt().ifPresent(soConfigBuilder::backlog);
-            config.get("timeout").asOptionalInt().ifPresent(soConfigBuilder::timeoutMillis);
-            config.get("receive-buffer").asOptionalInt().ifPresent(soConfigBuilder::receiveBufferSize);
+            config.get("port").asInt().ifPresent(soConfigBuilder::port);
+            config.get("bind-address")
+                    .asString()
+                    .map(this::string2InetAddress)
+                    .ifPresent(soConfigBuilder::bindAddress);
+            config.get("backlog").asInt().ifPresent(soConfigBuilder::backlog);
+            config.get("timeout").asInt().ifPresent(soConfigBuilder::timeoutMillis);
+            config.get("receive-buffer").asInt().ifPresent(soConfigBuilder::receiveBufferSize);
 
             // ssl
             Config sslConfig = config.get("ssl");
             if (sslConfig.exists()) {
                 try {
-                    soConfigBuilder.ssl(SSLContextBuilder.fromConfig(sslConfig));
+                    soConfigBuilder.ssl(SSLContextBuilder.create(sslConfig));
                 } catch (IllegalStateException e) {
                     throw new ConfigException("Cannot load SSL configuration.", e);
                 }

@@ -23,7 +23,6 @@ import java.util.Optional;
 import java.util.concurrent.Executor;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
-import java.util.function.Supplier;
 
 import io.helidon.common.OptionalHelper;
 import io.helidon.common.reactive.Flow;
@@ -58,8 +57,8 @@ public abstract class AbstractConfigSource<S> extends AbstractSource<ObjectNode,
     protected AbstractConfigSource(Builder<?, ?> builder) {
         super(builder);
 
-        mediaTypeMapping = builder.getMediaTypeMapping();
-        parserMapping = builder.getParserMapping();
+        mediaTypeMapping = builder.mediaTypeMapping();
+        parserMapping = builder.parserMapping();
     }
 
     @Override
@@ -67,7 +66,11 @@ public abstract class AbstractConfigSource<S> extends AbstractSource<ObjectNode,
         configContext = context;
     }
 
-    protected ConfigContext getConfigContext() {
+    /**
+     * Config context associated with this source.
+     * @return config context
+     */
+    protected ConfigContext configContext() {
         return configContext;
     }
 
@@ -81,7 +84,7 @@ public abstract class AbstractConfigSource<S> extends AbstractSource<ObjectNode,
     }
 
     private ConfigNode processNode(Optional<S> datastamp, ConfigKeyImpl key, ConfigNode node) {
-        switch (node.getNodeType()) {
+        switch (node.nodeType()) {
         case OBJECT:
             return processObject(datastamp, key, (ObjectNode) node);
         case LIST:
@@ -115,14 +118,14 @@ public abstract class AbstractConfigSource<S> extends AbstractSource<ObjectNode,
         AtomicReference<ConfigNode> result = new AtomicReference<>(valueNode);
         findParserForKey(key)
                 .ifPresent(parser -> result.set(parser.parse(
-                        Content.from(new StringReader(valueNode.get()), null, datastamp))));
+                        Content.create(new StringReader(valueNode.get()), null, datastamp))));
         return result.get();
     }
 
     private Optional<ConfigParser> findParserForKey(Config.Key key) {
         return OptionalHelper.from(Optional.ofNullable(parserMapping).map(mapping -> mapping.apply(key)))
                 .or(() -> Optional.ofNullable(mediaTypeMapping).map(mapping -> mapping.apply(key))
-                        .flatMap(mediaType -> getConfigContext().findParser(mediaType)))
+                        .flatMap(mediaType -> configContext().findParser(mediaType)))
                 .asOptional();
     }
 
@@ -133,7 +136,7 @@ public abstract class AbstractConfigSource<S> extends AbstractSource<ObjectNode,
      */
     @Override
     public final Flow.Publisher<Optional<ObjectNode>> changes() {
-        return getChangesPublisher();
+        return changesPublisher();
     }
 
     /**
@@ -151,7 +154,7 @@ public abstract class AbstractConfigSource<S> extends AbstractSource<ObjectNode,
      */
     public abstract static class Builder<B extends Builder<B, T>, T>
             extends AbstractSource.Builder<B, T, ConfigSource>
-            implements Supplier<ConfigSource> {
+            implements io.helidon.common.Builder<ConfigSource> {
 
         private static final String MEDIA_TYPE_MAPPING_KEY = "media-type-mapping";
         private final B thisBuilder;
@@ -193,7 +196,7 @@ public abstract class AbstractConfigSource<S> extends AbstractSource<ObjectNode,
         @Override
         protected B init(Config metaConfig) {
             //media-type-mapping
-            metaConfig.get(MEDIA_TYPE_MAPPING_KEY).detach().asOptionalMap()
+            metaConfig.get(MEDIA_TYPE_MAPPING_KEY).detach().asMap()
                     .ifPresent(this::initMediaTypeMapping);
 
             return super.init(metaConfig);
@@ -229,11 +232,19 @@ public abstract class AbstractConfigSource<S> extends AbstractSource<ObjectNode,
             return thisBuilder;
         }
 
-        protected Function<Config.Key, String> getMediaTypeMapping() {
+        /**
+         * Media type mapping function.
+         * @return media type mapping
+         */
+        protected Function<Config.Key, String> mediaTypeMapping() {
             return mediaTypeMapping;
         }
 
-        protected Function<Config.Key, ConfigParser> getParserMapping() {
+        /**
+         * Parser mapping function.
+         * @return parser mapping
+         */
+        protected Function<Config.Key, ConfigParser> parserMapping() {
             return parserMapping;
         }
 

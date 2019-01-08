@@ -120,7 +120,7 @@ public final class Main {
 
         // Get webserver config from the "server" section of application.yaml
         ServerConfiguration serverConfig =
-                ServerConfiguration.fromConfig(config.get("server")); // <1>
+                ServerConfiguration.create(config.get("server")); // <1>
 
         WebServer server = WebServer.create(serverConfig, createRouting()); // <2>
 

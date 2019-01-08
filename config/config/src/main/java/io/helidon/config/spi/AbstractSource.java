@@ -59,10 +59,10 @@ public abstract class AbstractSource<T, S> implements Source<T> {
 
     AbstractSource(Builder<?, ?, ?> builder) {
         mandatory = builder.isMandatory();
-        pollingStrategy = builder.getPollingStrategy();
-        changesExecutor = builder.getChangesExecutor();
-        retryPolicy = builder.getRetryPolicy();
-        changesSubmitter = new SubmissionPublisher<>(changesExecutor, builder.getChangesMaxBuffer());
+        pollingStrategy = builder.pollingStrategy();
+        changesExecutor = builder.changesExecutor();
+        retryPolicy = builder.retryPolicy();
+        changesSubmitter = new SubmissionPublisher<>(changesExecutor, builder.changesMaxBuffer());
         changesPublisher = ConfigHelper.suspendablePublisher(changesSubmitter,
                                                              this::subscribePollingStrategy,
                                                              this::cancelPollingStrategy);
@@ -98,7 +98,7 @@ public abstract class AbstractSource<T, S> implements Source<T> {
         }
     }
 
-    SubmissionPublisher<Optional<T>> getChangesSubmitter() {
+    SubmissionPublisher<Optional<T>> changesSubmitter() {
         return changesSubmitter;
     }
 
@@ -121,11 +121,11 @@ public abstract class AbstractSource<T, S> implements Source<T> {
         pollingEventSubscriber = null;
     }
 
-    Flow.Publisher<Optional<T>> getChangesPublisher() {
+    Flow.Publisher<Optional<T>> changesPublisher() {
         return changesPublisher;
     }
 
-    PollingStrategy getPollingStrategy() {
+    PollingStrategy pollingStrategy() {
         return pollingStrategy;
     }
 
@@ -163,7 +163,7 @@ public abstract class AbstractSource<T, S> implements Source<T> {
      */
     protected abstract Optional<S> dataStamp();
 
-    Optional<Data<T, S>> getLastData() {
+    Optional<Data<T, S>> lastData() {
         return lastData;
     }
 
@@ -294,7 +294,7 @@ public abstract class AbstractSource<T, S> implements Source<T> {
      */
     String formatDescription(String uid) {
         return Source.super.description() + "[" + uid + "]" + (isMandatory() ? "" : "?")
-                + (getPollingStrategy().equals(PollingStrategies.nop()) ? "" : "*");
+                + (pollingStrategy().equals(PollingStrategies.nop()) ? "" : "*");
     }
 
     /**
@@ -363,7 +363,8 @@ public abstract class AbstractSource<T, S> implements Source<T> {
          */
         protected B init(Config metaConfig) {
             //optional / mandatory
-            metaConfig.get(OPTIONAL_KEY).asOptionalBoolean()
+            metaConfig.get(OPTIONAL_KEY)
+                    .asBoolean()
                     .filter(value -> value) //filter `true` only
                     .ifPresent(value -> optional());
             //polling-strategy
@@ -371,7 +372,7 @@ public abstract class AbstractSource<T, S> implements Source<T> {
                     .ifExists(cfg -> pollingStrategy(PollingStrategyConfigMapper.instance().apply(cfg, targetType)));
             //retry-policy
             metaConfig.get(RETRY_POLICY_KEY)
-                    .asOptional(RetryPolicy.class)
+                    .as(RetryPolicy::create)
                     .ifPresent(this::retryPolicy);
 
             return thisBuilder;
@@ -394,7 +395,7 @@ public abstract class AbstractSource<T, S> implements Source<T> {
         /**
          * Sets the polling strategy that accepts key source attributes.
          * <p>
-         * Concrete subclasses should override {@link #getTarget()} to provide
+         * Concrete subclasses should override {@link #target()} to provide
          * the key source attributes (target). For example, the {@code Builder}
          * for a {@code FileConfigSource} or {@code ClasspathConfigSource} uses
          * the {@code Path} to the corresponding file or resource as the key
@@ -406,10 +407,10 @@ public abstract class AbstractSource<T, S> implements Source<T> {
          * @throws UnsupportedOperationException if the concrete {@code Builder}
          * implementation does not support the polling strategy
          * @see #pollingStrategy(Supplier)
-         * @see #getTarget()
+         * @see #target()
          */
         public final B pollingStrategy(Function<T, Supplier<PollingStrategy>> pollingStrategyProvider) {
-            pollingStrategy(() -> pollingStrategyProvider.apply(getTarget()).get());
+            pollingStrategy(() -> pollingStrategyProvider.apply(target()).get());
 
             return thisBuilder;
         }
@@ -419,7 +420,7 @@ public abstract class AbstractSource<T, S> implements Source<T> {
          *
          * @return key source attributes (target).
          */
-        protected T getTarget() {
+        protected T target() {
             return null;
         }
 
@@ -461,7 +462,7 @@ public abstract class AbstractSource<T, S> implements Source<T> {
          * Specifies maximum capacity for each subscriber's buffer to be used to deliver
          * {@link ConfigSource#changes() config source changes}.
          * <p>
-         * By default {@link Flow#DEFAULT_BUFFER_SIZE} is used.
+         * By default {@link Flow#defaultBufferSize()} is used.
          * <p>
          * Note: Not consumed events will be dropped off.
          *
@@ -511,7 +512,7 @@ public abstract class AbstractSource<T, S> implements Source<T> {
          *
          * @return polling-strategy property.
          */
-        protected PollingStrategy getPollingStrategy() {
+        protected PollingStrategy pollingStrategy() {
             PollingStrategy pollingStrategy = pollingStrategySupplier.get();
 
             Objects.requireNonNull(pollingStrategy, "pollingStrategy cannot be null");
@@ -524,7 +525,7 @@ public abstract class AbstractSource<T, S> implements Source<T> {
          *
          * @return changes-executor property.
          */
-        protected Executor getChangesExecutor() {
+        protected Executor changesExecutor() {
             return changesExecutor;
         }
 
@@ -533,11 +534,15 @@ public abstract class AbstractSource<T, S> implements Source<T> {
          *
          * @return changes-max-buffer property.
          */
-        protected int getChangesMaxBuffer() {
+        protected int changesMaxBuffer() {
             return changesMaxBuffer;
         }
 
-        protected RetryPolicy getRetryPolicy() {
+        /**
+         * Retry policy configured in this builder.
+         * @return retry policy
+         */
+        protected RetryPolicy retryPolicy() {
             return retryPolicySupplier.get();
         }
     }

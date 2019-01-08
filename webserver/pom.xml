@@ -38,9 +38,5 @@
         <module>json</module>
         <module>multipart</module>
         <module>test-support</module>
-        <module>zipkin</module>
-        <module>prometheus</module>
-        <module>bundles</module>
-        <module>examples</module>
     </modules>
 </project>

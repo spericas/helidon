@@ -15,8 +15,6 @@
  */
 package io.helidon.config;
 
-import java.util.Optional;
-
 import io.helidon.common.CollectionsHelper;
 
 import org.junit.jupiter.api.Test;
@@ -30,7 +28,7 @@ import static org.junit.Assert.assertThat;
 public class TreeStructureTests {
     @Test
     void testEmptyLeafAndTreeNodes() {
-        Config config = Config.withSources(ConfigSources.from(
+        Config config = Config.builder(ConfigSources.create(
                 CollectionsHelper.mapOf("a", "rootValue",
                                         "a.b", "leafTreeNode",
                                         "a.b.c", "leafNode",
@@ -40,29 +38,29 @@ public class TreeStructureTests {
                                         "c.a.2", "third")
         )).build();
 
-        assertThat(config.get("a").value(), is(Optional.of("rootValue")));
-        assertThat(config.get("a.b").value(), is(Optional.of("leafTreeNode")));
-        assertThat(config.get("a.b.c").value(), is(Optional.of("leafNode")));
+        assertThat(config.get("a").asString(), is(ConfigValues.simpleValue("rootValue")));
+        assertThat(config.get("a.b").asString(), is(ConfigValues.simpleValue("leafTreeNode")));
+        assertThat(config.get("a.b.c").asString(), is(ConfigValues.simpleValue("leafNode")));
 
-        assertThat(config.get("b").value(), is(Optional.empty()));
-        assertThat(config.get("b.c").value(), is(Optional.of("leafNode")));
+        assertThat(config.get("b").asString(), is(ConfigValues.empty()));
+        assertThat(config.get("b.c").asString(), is(ConfigValues.simpleValue("leafNode")));
 
-        assertThat(config.get("c").value(), is(Optional.empty()));
-        assertThat(config.get("c.a").value(), is(Optional.empty()));
-        assertThat(config.get("c.a").asList(String.class), is(CollectionsHelper.listOf("first", "second", "third")));
+        assertThat(config.get("c").asString(), is(ConfigValues.empty()));
+        assertThat(config.get("c.a").asString(), is(ConfigValues.empty()));
+        assertThat(config.get("c.a").asList(String.class).get(), is(CollectionsHelper.listOf("first", "second", "third")));
     }
 
     @Test
     void testListAndDirectValue() {
-        Config config = Config.withSources(ConfigSources.from(
+        Config config = Config.builder(ConfigSources.create(
                 CollectionsHelper.mapOf("c.a", "treeAndLeafNode",
                                         "c.a.0", "first",
                                         "c.a.1", "second",
                                         "c.a.2", "third")
         )).build();
 
-        assertThat(config.get("c").value(), is(Optional.empty()));
-        assertThat(config.get("c.a").value(), is(Optional.of("treeAndLeafNode")));
-        assertThat(config.get("c.a").asList(String.class), is(CollectionsHelper.listOf("first", "second", "third")));
+        assertThat(config.get("c").asString(), is(ConfigValues.empty()));
+        assertThat(config.get("c.a").asString(), is(ConfigValues.simpleValue("treeAndLeafNode")));
+        assertThat(config.get("c.a").asList(String.class).get(), is(CollectionsHelper.listOf("first", "second", "third")));
     }
 }
