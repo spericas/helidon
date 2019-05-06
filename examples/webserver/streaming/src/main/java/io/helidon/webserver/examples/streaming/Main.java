@@ -16,6 +16,7 @@
 
 package io.helidon.webserver.examples.streaming;
 
+import io.helidon.media.jsonp.server.JsonSupport;
 import io.helidon.webserver.Routing;
 import io.helidon.webserver.ServerConfiguration;
 import io.helidon.webserver.WebServer;
@@ -27,7 +28,8 @@ public class Main {
 
     static final String LARGE_FILE_RESOURCE = "/large-file.bin";
 
-    private Main() {}
+    private Main() {
+    }
 
     /**
      * Creates new {@link Routing}.
@@ -36,8 +38,9 @@ public class Main {
      */
     static Routing createRouting() {
         return Routing.builder()
-                      .register(new StreamingService())
-                      .build();
+                .register(JsonSupport.create())
+                .register(new StreamingService())
+                .build();
     }
 
     /**
@@ -47,16 +50,16 @@ public class Main {
      */
     public static void main(String[] args) {
         ServerConfiguration config = ServerConfiguration.builder()
-                                                        .port(8080)
-                                                        .build();
+                .port(8080)
+                .build();
         WebServer server = WebServer.create(config, createRouting());
 
         server.start().thenAccept(ws ->
-            System.out.println("Steaming service is up at http://localhost:" + ws.port())
+                System.out.println("Steaming service is up at http://localhost:" + ws.port())
         );
 
         server.whenShutdown().thenRun(() ->
-            System.out.println("Streaming service is down")
+                System.out.println("Streaming service is down")
         );
     }
 }

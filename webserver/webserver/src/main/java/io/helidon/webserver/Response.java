@@ -39,7 +39,6 @@ import io.helidon.common.http.MediaType;
 import io.helidon.common.reactive.Flow;
 import io.helidon.common.reactive.ReactiveStreamsAdapter;
 import io.helidon.media.common.ContentWriters;
-
 import io.opentracing.Span;
 import io.opentracing.SpanContext;
 import io.opentracing.Tracer;
@@ -61,6 +60,7 @@ abstract class Response implements ServerResponse {
     private final SendLockSupport sendLockSupport;
     private final ArrayList<Writer> writers;
     private final ArrayList<Function<Flow.Publisher<DataChunk>, Flow.Publisher<DataChunk>>> filters;
+    private ArrayList<StreamWriter<?>> streamWriters;
 
     /**
      * Creates new instance.
@@ -193,8 +193,65 @@ abstract class Response implements ServerResponse {
         return send(null);
     }
 
+    @Override
+    public <T> CompletionStage<ServerResponse> send(Flow.Publisher<T> content, Class<T> itemClass) {
+        Span writeSpan = createWriteSpan(content);
+        try {
+            sendLockSupport.execute(() -> {
+                Flow.Publisher<DataChunk> publisher = createPublisherUsingStreamWriter(content, itemClass);
+                if (publisher == null) {
+                    throw new IllegalArgumentException("Cannot write! No registered stream writer for '"
+                            + content.getClass().toString() + "'.");
+                }
+                Flow.Publisher<DataChunk> p = applyFilters(publisher, writeSpan);
+                sendLockSupport.contentSend = true;
+                p.subscribe(bareResponse);
+
+            }, content == null);
+            return whenSent();
+        } catch (RuntimeException | Error e) {
+            writeSpan.finish();
+            throw e;
+        }
+    }
+
+    <T> Flow.Publisher<DataChunk> createPublisherUsingStreamWriter(Flow.Publisher<T> content, Class<T> itemClass) {
+        if (content == null) {
+            return ReactiveStreamsAdapter.publisherToFlow(Mono.empty());
+        }
+
+        // Try to get a publisher from registered writers
+        synchronized (sendLockSupport) {
+            for (int i = streamWriters.size() - 1; i >= 0; i--) {
+                StreamWriter<T> streamWriter = (StreamWriter<T>) streamWriters.get(i);
+                if (streamWriter.accept(content)) {
+                    return streamWriter.function.apply(content);
+                }
+            }
+        }
+
+        return null;
+    }
+
+    @Override
+    public <T> ServerResponse registerStreamWriter(MediaType contentType,
+                                                   Function<Flow.Publisher<T>, Flow.Publisher<DataChunk>> function) {
+        sendLockSupport.execute(() ->
+                getStreamWriters().add(new StreamWriter<>(contentType, function)),
+                false);
+        return this;
+    }
+
+    private <T> ArrayList<StreamWriter<?>> getStreamWriters() {
+        if (streamWriters == null) {
+            streamWriters = new ArrayList<>();
+        }
+        return streamWriters;
+    }
+
     @SuppressWarnings("unchecked")
-    <T> Flow.Publisher<DataChunk> createPublisherUsingWriter(T content) {
+    @Override
+    public <T> Flow.Publisher<DataChunk> createPublisherUsingWriter(T content) {
         if (content == null) {
             return ReactiveStreamsAdapter.publisherToFlow(Mono.empty());
         }
@@ -311,15 +368,38 @@ abstract class Response implements ServerResponse {
         return completionStage;
     }
 
-    class Writer<T> {
-        private final Predicate<Object> acceptPredicate;
+    class BaseWriter {
         private final MediaType requestedContentType;
+
+        BaseWriter(MediaType contentType) {
+            this.requestedContentType = contentType;
+        }
+
+        boolean accept(Object o) {
+            // Test content type compatibility
+            return requestedContentType == null
+                    || OptionalHelper.from(headers().contentType())
+                    .or(() -> { // if no contentType is yet registered, try to write requested
+                        try {
+                            headers.contentType(requestedContentType);
+                            return Optional.of(requestedContentType);
+                        } catch (Exception e) {
+                            return Optional.empty();
+                        }
+                    }).asOptional()
+                    .filter(requestedContentType) // MediaType is a predicate of compatible media type
+                    .isPresent();
+        }
+    }
+
+    class Writer<T> extends BaseWriter {
+        private final Predicate<Object> acceptPredicate;
         private final Function<T, Flow.Publisher<DataChunk>> function;
 
         Writer(Predicate acceptPredicate, MediaType contentType, Function<T, Flow.Publisher<DataChunk>> function) {
+            super(contentType);
             Objects.requireNonNull(function, "Parameter function is null!");
             this.acceptPredicate = acceptPredicate == null ? o -> true : acceptPredicate;
-            this.requestedContentType = contentType;
             this.function = function;
         }
 
@@ -333,20 +413,18 @@ abstract class Response implements ServerResponse {
             if (o == null || !acceptPredicate.test(o)) {
                 return false;
             }
+            return super.accept(o);
+        }
+    }
 
-            // Test content type compatibility
-            return requestedContentType == null
-                    || OptionalHelper.from(headers().contentType())
-                                .or(() -> { // if no contentType is yet registered, try to write requested
-                                    try {
-                                        headers.contentType(requestedContentType);
-                                        return Optional.of(requestedContentType);
-                                    } catch (Exception e) {
-                                        return Optional.empty();
-                                    }
-                                }).asOptional()
-                                .filter(requestedContentType) // MediaType is a predicate of compatible media type
-                                .isPresent();
+    class StreamWriter<T> extends BaseWriter {
+        private final Function<Flow.Publisher<T>, Flow.Publisher<DataChunk>> function;
+
+        StreamWriter(MediaType contentType,
+                     Function<Flow.Publisher<T>, Flow.Publisher<DataChunk>> function) {
+            super(contentType);
+            Objects.requireNonNull(function, "Parameter function is null!");
+            this.function = function;
         }
     }
 

@@ -138,15 +138,22 @@ public interface ServerResponse {
      */
     CompletionStage<ServerResponse> send();
 
+    <T> CompletionStage<ServerResponse> send(Flow.Publisher<T> content, Class<T> clazz);
+
+    <T> ServerResponse registerStreamWriter(MediaType contentType,
+                                            Function<Flow.Publisher<T>, Flow.Publisher<DataChunk>> function);
+
+    <T> Flow.Publisher<DataChunk> createPublisherUsingWriter(T content);
+
     /**
      * Registers a content writer for a given type.
      * <p>
      * Registered writer is used to marshal response content of given type to the {@link Flow.Publisher Publisher}
      * of {@link DataChunk response chunks}.
      *
-     * @param type     a type of the content. If {@code null} then accepts any type.
+     * @param type a type of the content. If {@code null} then accepts any type.
      * @param function a writer function
-     * @param <T>      a type of the content
+     * @param <T> a type of the content
      * @return this instance of {@link ServerResponse}
      * @throws NullPointerException if {@code function} parameter is {@code null}
      */
