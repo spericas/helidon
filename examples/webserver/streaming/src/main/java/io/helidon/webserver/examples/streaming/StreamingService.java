@@ -74,11 +74,11 @@ public class StreamingService implements Service {
     }
 
     private void downloadJson(ServerRequest request, ServerResponse response) {
-        // Register stream writer
+        // Register stream writer -- should be moved to JsonSupport
         response.registerStreamWriter(MediaType.APPLICATION_JSON,
-                                      new JsonArrayStreamWriter<>(response, JsonObject.class));
+                                      new JsonArrayStreamWriter<>(request, response, JsonObject.class));
 
-        // JSON object
+        // Create JSON object
         JsonObject msg = JSON.createObjectBuilder()
                 .add("message", "This is a message")
                 .build();

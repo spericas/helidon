@@ -27,25 +27,21 @@ import io.helidon.common.reactive.Flow;
  **/
 public abstract class BaseStreamWriter<T> implements Function<Flow.Publisher<T>, Flow.Publisher<DataChunk>> {
 
+    private final ServerRequest request;
     private final ServerResponse response;
     private final Class<T> type;
-    private final DataChunk beginChunk;
-    private final DataChunk separatorChunk;
-    private final DataChunk endChunk;
 
-    public BaseStreamWriter(ServerResponse response,
-                            Class<T> type,
-                            DataChunk beginChunk,
-                            DataChunk separatorChunk,
-                            DataChunk endChunk) {
+    public BaseStreamWriter(ServerRequest request, ServerResponse response, Class<T> type) {
+        Objects.requireNonNull(response, "Request must be non-null");
         Objects.requireNonNull(response, "Response must be non-null");
         Objects.requireNonNull(type, "Type must be non-null");
-
+        this.request = request;
         this.response = response;
         this.type = type;
-        this.beginChunk = beginChunk;
-        this.separatorChunk = separatorChunk;
-        this.endChunk = endChunk;
+    }
+
+    public ServerRequest getRequest() {
+        return request;
     }
 
     public ServerResponse getResponse() {
@@ -54,17 +50,5 @@ public abstract class BaseStreamWriter<T> implements Function<Flow.Publisher<T>,
 
     public Class<T> getType() {
         return type;
-    }
-
-    public DataChunk getBeginChunk() {
-        return beginChunk;
-    }
-
-    public DataChunk getSeparatorChunk() {
-        return separatorChunk;
-    }
-
-    public DataChunk getEndChunk() {
-        return endChunk;
     }
 }

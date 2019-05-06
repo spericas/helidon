@@ -16,25 +16,31 @@
 
 package io.helidon.media.jsonp.server;
 
-import java.nio.charset.StandardCharsets;
+import java.nio.charset.Charset;
 
 import io.helidon.common.http.DataChunk;
 import io.helidon.common.reactive.Flow;
 import io.helidon.webserver.BaseStreamWriter;
+import io.helidon.webserver.ServerRequest;
 import io.helidon.webserver.ServerResponse;
+
+import static io.helidon.media.common.ContentTypeCharset.determineCharset;
 
 /**
  * Class JsonArrayStreamWriter.
  */
 public class JsonArrayStreamWriter<T> extends BaseStreamWriter<T> {
 
-    // TODO charsets
-    private static final DataChunk BEGIN_CHUNK = DataChunk.create("[".getBytes(StandardCharsets.UTF_8));
-    private static final DataChunk SEPARATOR_CHUNK = DataChunk.create(",".getBytes(StandardCharsets.UTF_8));
-    private static final DataChunk END_CHUNK = DataChunk.create("]".getBytes(StandardCharsets.UTF_8));
+    private final DataChunk beginChunk;
+    private final DataChunk separatorChunk;
+    private final DataChunk endChunk;
 
-    public JsonArrayStreamWriter(ServerResponse response, Class<T> type) {
-        super(response, type, BEGIN_CHUNK, SEPARATOR_CHUNK, END_CHUNK);
+    public JsonArrayStreamWriter(ServerRequest request, ServerResponse response, Class<T> type) {
+        super(request, response, type);
+        Charset charset = determineCharset(request.headers());
+        beginChunk = DataChunk.create("[".getBytes(charset));
+        separatorChunk = DataChunk.create(",".getBytes(charset));
+        endChunk = DataChunk.create("]".getBytes(charset));
     }
 
     @Override
@@ -44,48 +50,61 @@ public class JsonArrayStreamWriter<T> extends BaseStreamWriter<T> {
 
     class JsonArrayStreamPublisher implements Flow.Publisher<DataChunk>, Flow.Subscriber<T> {
 
+        private long itemsRequested;
         private boolean first = true;
-        private Flow.Subscriber<? super DataChunk> subscriber;
-        private final Flow.Publisher<T> publisher;
+        private Flow.Subscriber<? super DataChunk> chunkSubscriber;
+        private final Flow.Publisher<T> itemPublisher;
+        private Flow.Subscription itemSubscription;
 
-        JsonArrayStreamPublisher(Flow.Publisher<T> publisher) {
-            this.publisher = publisher;
+        JsonArrayStreamPublisher(Flow.Publisher<T> itemPublisher) {
+            this.itemPublisher = itemPublisher;
         }
 
+        // -- Publisher<DataChunk> --------------------------------------------
+
         @Override
-        public void subscribe(Flow.Subscriber<? super DataChunk> subscriber) {
-            this.subscriber = subscriber;
-            this.subscriber.onSubscribe(new Flow.Subscription() {
+        public void subscribe(Flow.Subscriber<? super DataChunk> chunkSubscriber) {
+            this.chunkSubscriber = chunkSubscriber;
+            this.chunkSubscriber.onSubscribe(new Flow.Subscription() {
                 @Override
                 public void request(long n) {
-                    publisher.subscribe(JsonArrayStreamPublisher.this);
+                    itemsRequested = n;
+                    itemPublisher.subscribe(JsonArrayStreamPublisher.this);
                 }
 
                 @Override
                 public void cancel() {
+                    if (itemSubscription != null) {
+                        itemSubscription.cancel();
+                    }
+                    itemsRequested = 0;
                 }
             });
 
         }
 
+        // -- Subscriber<T> ---------------------------------------------------
+
         @Override
-        public void onSubscribe(Flow.Subscription subscription) {
-            if (subscriber != null) {
-                subscriber.onNext(getBeginChunk());
-            }
-            subscription.request(Long.MAX_VALUE);
+        public void onSubscribe(Flow.Subscription itemSubscription) {
+            this.itemSubscription = itemSubscription;
+            chunkSubscriber.onNext(beginChunk);
+            itemSubscription.request(itemsRequested);
         }
 
         @Override
         public void onNext(T item) {
             if (!first) {
-                subscriber.onNext(getSeparatorChunk());
+                chunkSubscriber.onNext(separatorChunk);
             } else {
                 first = false;
             }
 
-            Flow.Publisher<DataChunk> itemPublisher = findPublisher(item);
-            itemPublisher.subscribe(new Flow.Subscriber<DataChunk>() {
+            Flow.Publisher<DataChunk> itemChunkPublisher = getResponse().createPublisherUsingWriter(item);
+            if (itemChunkPublisher == null) {
+                throw new RuntimeException("Unable to find publisher for item " + item);
+            }
+            itemChunkPublisher.subscribe(new Flow.Subscriber<DataChunk>() {
                 @Override
                 public void onSubscribe(Flow.Subscription subscription) {
                     subscription.request(Long.MAX_VALUE);
@@ -93,41 +112,30 @@ public class JsonArrayStreamWriter<T> extends BaseStreamWriter<T> {
 
                 @Override
                 public void onNext(DataChunk item) {
-                    subscriber.onNext(item);
+                    chunkSubscriber.onNext(item);
                 }
 
                 @Override
                 public void onError(Throwable throwable) {
-                    subscriber.onError(throwable);
+                    chunkSubscriber.onError(throwable);
                 }
 
                 @Override
                 public void onComplete() {
+                    // no-op
                 }
             });
         }
 
         @Override
         public void onError(Throwable throwable) {
-            if (subscriber != null) {
-                subscriber.onNext(getEndChunk());
-            }
+            chunkSubscriber.onNext(endChunk);
         }
 
         @Override
         public void onComplete() {
-            if (subscriber != null) {
-                subscriber.onNext(getEndChunk());
-                subscriber.onComplete();
-            }
-        }
-
-        private Flow.Publisher<DataChunk> findPublisher(T item) {
-            Flow.Publisher<DataChunk> itemPublisher = getResponse().createPublisherUsingWriter(item);
-            if (itemPublisher == null) {
-                throw new RuntimeException("Unable to find publisher for item " + item);
-            }
-            return itemPublisher;
+            chunkSubscriber.onNext(endChunk);
+            chunkSubscriber.onComplete();
         }
     }
 }
