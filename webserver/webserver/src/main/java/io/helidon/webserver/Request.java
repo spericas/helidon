@@ -38,8 +38,10 @@ import java.util.function.Function;
 import java.util.function.Predicate;
 
 import io.helidon.common.CollectionsHelper;
+import io.helidon.common.GenericType;
 import io.helidon.common.http.ContextualRegistry;
 import io.helidon.common.http.DataChunk;
+import io.helidon.common.http.FormParam;
 import io.helidon.common.http.Http;
 import io.helidon.common.http.MediaType;
 import io.helidon.common.http.Parameters;
@@ -397,6 +399,16 @@ abstract class Request implements ServerRequest {
                 filtersLock.readLock().unlock();
             }
             return lastPublisher;
+        }
+
+        @Override
+        public <T> Flow.Publisher<T> asPublisherOf(Class<T> type) {
+            return null;
+        }
+
+        @Override
+        public <T> Flow.Publisher<T> asPublisherOf(GenericType<T> type) {
+            return null;
         }
     }
 

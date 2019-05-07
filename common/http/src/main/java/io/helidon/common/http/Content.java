@@ -16,10 +16,12 @@
 
 package io.helidon.common.http;
 
+import java.text.Normalizer;
 import java.util.concurrent.CompletionStage;
 import java.util.function.Function;
 import java.util.function.Predicate;
 
+import io.helidon.common.GenericType;
 import io.helidon.common.reactive.Flow;
 
 /**
@@ -125,4 +127,9 @@ public interface Content extends Flow.Publisher<DataChunk> {
      * @return a completion stage of the requested type
      */
     <T> CompletionStage<T> as(Class<T> type);
+
+    <T> Flow.Publisher<T> asPublisherOf(Class<T> type);
+
+    <T> Flow.Publisher<T> asPublisherOf(GenericType<T> type);
+
 }

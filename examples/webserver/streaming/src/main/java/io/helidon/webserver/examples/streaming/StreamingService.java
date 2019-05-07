@@ -22,9 +22,13 @@ import javax.json.JsonObject;
 import java.net.URISyntaxException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.text.Normalizer;
 import java.util.Collections;
+import java.util.List;
 import java.util.logging.Logger;
 
+import io.helidon.common.GenericType;
+import io.helidon.common.http.FormParam;
 import io.helidon.common.http.MediaType;
 import io.helidon.common.reactive.Flow;
 import io.helidon.media.jsonp.server.JsonArrayStreamWriter;
@@ -76,7 +80,26 @@ public class StreamingService implements Service {
     private void downloadJson(ServerRequest request, ServerResponse response) {
         // Register stream writer -- should be moved to JsonSupport
         response.registerStreamWriter(MediaType.APPLICATION_JSON,
-                                      new JsonArrayStreamWriter<>(request, response, JsonObject.class));
+                new JsonArrayStreamWriter<>(request, response, JsonObject.class));
+
+        request.content().asPublisherOf(JsonObject.class).subscribe(
+                new Flow.Subscriber<JsonObject>() {
+                    @Override
+                    public void onSubscribe(Flow.Subscription subscription) {
+                    }
+
+                    @Override
+                    public void onNext(JsonObject item) {
+                    }
+
+                    @Override
+                    public void onError(Throwable throwable) {
+                    }
+
+                    @Override
+                    public void onComplete() {
+                    }
+                });
 
         // Create JSON object
         JsonObject msg = JSON.createObjectBuilder()
@@ -98,6 +121,43 @@ public class StreamingService implements Service {
                     public void cancel() {
                     }
                 }), JsonObject.class);
+    }
+
+    private void processForm(ServerRequest request, ServerResponse response) {
+        request.content()
+                .asPublisherOf(new GenericType<FormParam<String>>(){})
+                .subscribe(new Flow.Subscriber<FormParam<String>>() {
+                    @Override
+                    public void onSubscribe(Flow.Subscription subscription) {
+                    }
+
+                    @Override
+                    public void onNext(FormParam<String> item) {
+                    }
+
+                    @Override
+                    public void onError(Throwable throwable) {
+                    }
+
+                    @Override
+                    public void onComplete() {
+                    }
+                });
+
+        response.send(subscriber -> subscriber.onSubscribe(
+                new Flow.Subscription() {
+                    @Override
+                    public void request(long n) {
+                        for (int i = 0; i < 10; i++) {
+                            subscriber.onNext(new FormParam("param" + i, "value" + i));
+                        }
+                        subscriber.onComplete();
+                    }
+
+                    @Override
+                    public void cancel() {
+                    }
+                }), FormParam.class);
     }
 
 }

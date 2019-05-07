@@ -45,10 +45,10 @@ public class JsonArrayStreamWriter<T> extends BaseStreamWriter<T> {
 
     @Override
     public Flow.Publisher<DataChunk> apply(Flow.Publisher<T> publisher) {
-        return new JsonArrayStreamPublisher(publisher);
+        return new JsonArrayStreamProcessor(publisher);
     }
 
-    class JsonArrayStreamPublisher implements Flow.Publisher<DataChunk>, Flow.Subscriber<T> {
+    class JsonArrayStreamProcessor implements Flow.Publisher<DataChunk>, Flow.Subscriber<T> {
 
         private long itemsRequested;
         private boolean first = true;
@@ -56,7 +56,7 @@ public class JsonArrayStreamWriter<T> extends BaseStreamWriter<T> {
         private final Flow.Publisher<T> itemPublisher;
         private Flow.Subscription itemSubscription;
 
-        JsonArrayStreamPublisher(Flow.Publisher<T> itemPublisher) {
+        JsonArrayStreamProcessor(Flow.Publisher<T> itemPublisher) {
             this.itemPublisher = itemPublisher;
         }
 
@@ -69,7 +69,7 @@ public class JsonArrayStreamWriter<T> extends BaseStreamWriter<T> {
                 @Override
                 public void request(long n) {
                     itemsRequested = n;
-                    itemPublisher.subscribe(JsonArrayStreamPublisher.this);
+                    itemPublisher.subscribe(JsonArrayStreamProcessor.this);
                 }
 
                 @Override
