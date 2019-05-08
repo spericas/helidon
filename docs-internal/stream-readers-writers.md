@@ -118,14 +118,15 @@ We need to use `GenericType<T>` to ensure that type information is available to 
 runtime as follows:
 
 ```java
-        request.content().asPublisherOf(new GenericType<FormParam<String>>(){})
-                         .subscribe(new Flow.Subscriber<JsonObject>() {
+        request.content()
+                .asPublisherOf(new GenericType<FormParam<String>>(){})
+                .subscribe(new Flow.Subscriber<FormParam<String>>() {
                     @Override
                     public void onSubscribe(Flow.Subscription subscription) {
                     }
 
                     @Override
-                    public void onNext(JsonObject item) {
+                    public void onNext(FormParam<String> item) {
                     }
 
                     @Override
@@ -135,7 +136,7 @@ runtime as follows:
                     @Override
                     public void onComplete() {
                     }
-                }); 
+                });
 ```
 
 Note that this represents a low-level API to process forms. A higher-level API should be
