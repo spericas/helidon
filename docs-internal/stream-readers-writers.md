@@ -24,65 +24,68 @@ can be built on top of these stream readers and writers simply by adding new typ
 
 ## Example 
 
-An application returns a stream of JSON objects and uses `application/json` as media type.
-It registers a stream writer and provides a `Publisher<JsonObject>` as follows:
+An application returns a stream of JSON objects and uses `application/json` as media type. In the
+example below, ten JSON objects are streamed to a subscriber provided by Helidon:
 
 ```java
-// Register stream writer -- should be moved to JsonSupport
-response.registerStreamWriter(MediaType.APPLICATION_JSON,
-                              new JsonArrayStreamWriter<>(request, response, JsonObject.class));
+        // Create JSON object
+         JsonObject msg = JSON.createObjectBuilder()
+                 .add("message", "This is a message")
+                 .build();
+ 
+         // Produce response as stream of objects
+         response.send(subscriber -> subscriber.onSubscribe(
+                 new Flow.Subscription() {
+                     @Override
+                     public void request(long n) {
+                         for (int i = 0; i < 10; i++) {
+                             subscriber.onNext(msg);
+                         }
+                         subscriber.onComplete();
+                     }
+ 
+                     @Override
+                     public void cancel() {
+                     }
+                 }), JsonObject.class);
+```
 
-// Create JSON object
-JsonObject msg = JSON.createObjectBuilder()
-                     .add("message", "This is a message")
-                     .build();
+This example requires the registration of a new stream writer as shown below:
 
-// Produce response as stream of objects
-response.send(subscriber -> subscriber.onSubscribe(
-        new Flow.Subscription() {
-            @Override
-            public void request(long n) {
-                for (int i = 0; i < 10; i++) {
-                    subscriber.onNext(msg);
-                }
-                subscriber.onComplete();
-            }
-
-            @Override
-            public void cancel() {
-            }));
+```java
+     response.registerStreamWriter(
+                type -> type.isAssignableFrom(JsonObject.class)
+                        && request.headers().isAccepted(MediaType.APPLICATION_JSON),
+                MediaType.APPLICATION_JSON,
+                new JsonArrayStreamWriter<>(request, response, JsonObject.class));
 ```
 
 The class `JsonArrayStreamWriter` interjects data chunks for `[` , `,` and `]` as JSON array
-delimiters and uses an existing JSON writer to serialize each JSON object.
+delimiters and uses an existing JSON writer to serialize each JSON object. Note that
+the acceptance predicate inspects the `Accept` header and the object type.
 
 Similarly, an application can read a stream of JSON objects by subscribing to a
 `Publisher<JsonObject>` returned by Helidon as follows:
 
 ```java
-request.content()
-       .asPublisherOf(JsonObject.class)
-       .subscribe(new Flow.Subscriber<JsonObject>() {
-            @Override
-            public void onSubscribe(Flow.Subscription subscription) {
-                // ...
-            }
+        request.content().asPublisherOf(JsonObject.class).subscribe(
+                new Flow.Subscriber<JsonObject>() {
+                    @Override
+                    public void onSubscribe(Flow.Subscription subscription) {
+                    }
 
-            @Override
-            public void onNext(JsonObject item) {
-                // ...
-            }
+                    @Override
+                    public void onNext(JsonObject item) {
+                    }
 
-            @Override
-            public void onError(Throwable throwable) {
-                // ...
-            }
+                    @Override
+                    public void onError(Throwable throwable) {
+                    }
 
-            @Override
-            public void onComplete() {
-                // ...
-            }
-        });
+                    @Override
+                    public void onComplete() {
+                    }
+                }); 
 ```
 
 ## Multipart Support
@@ -115,25 +118,24 @@ We need to use `GenericType<T>` to ensure that type information is available to 
 runtime as follows:
 
 ```java
-request.content()
-       .asPublisherOf(new GenericType<FormParam<String>>(){})
-       .subscribe(new Flow.Subscriber<FormParam<String>>() {
-           @Override
-           public void onSubscribe(Flow.Subscription subscription) {
-           }
+        request.content().asPublisherOf(new GenericType<FormParam<String>>(){})
+                         .subscribe(new Flow.Subscriber<JsonObject>() {
+                    @Override
+                    public void onSubscribe(Flow.Subscription subscription) {
+                    }
 
-           @Override
-           public void onNext(FormParam<String> item) {
-           }
+                    @Override
+                    public void onNext(JsonObject item) {
+                    }
 
-           @Override
-           public void onError(Throwable throwable) {
-           }
+                    @Override
+                    public void onError(Throwable throwable) {
+                    }
 
-           @Override
-           public void onComplete() {
-           }
-       });
+                    @Override
+                    public void onComplete() {
+                    }
+                }); 
 ```
 
 Note that this represents a low-level API to process forms. A higher-level API should be
@@ -144,3 +146,5 @@ application. For example,
 request.content().as(Form.class).thenAccept(form -> ... );
 ```
 
+Helidon should provide additional support for those cases where streaming and the use
+of publishers and subscribers is unnecessary.

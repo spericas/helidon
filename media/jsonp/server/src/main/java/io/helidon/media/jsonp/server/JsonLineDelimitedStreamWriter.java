@@ -32,6 +32,6 @@ public class JsonLineDelimitedStreamWriter<T> extends JsonStreamWriter<T> {
     public JsonLineDelimitedStreamWriter(ServerRequest request, ServerResponse response, Class<T> type) {
         super(request, response, type);
         Charset charset = determineCharset(request.headers());
-        super.separatorChunk(DataChunk.create(true, "\r\n".getBytes(charset)));
+        separatorChunk(DataChunk.create(true, "\r\n".getBytes(charset)));
     }
 }

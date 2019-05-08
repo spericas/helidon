@@ -32,8 +32,8 @@ public class JsonArrayStreamWriter<T> extends JsonStreamWriter<T> {
     public JsonArrayStreamWriter(ServerRequest request, ServerResponse response, Class<T> type) {
         super(request, response, type);
         Charset charset = determineCharset(request.headers());
-        super.beginChunk(DataChunk.create("[".getBytes(charset)));
-        super.separatorChunk(DataChunk.create(",".getBytes(charset)));
-        super.endChunk(DataChunk.create("]".getBytes(charset)));
+        beginChunk(DataChunk.create("[".getBytes(charset)));
+        separatorChunk(DataChunk.create(",".getBytes(charset)));
+        endChunk(DataChunk.create("]".getBytes(charset)));
     }
 }

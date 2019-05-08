@@ -90,7 +90,7 @@ public class StreamingService implements Service {
                 MediaType.APPLICATION_STREAM_JSON,
                 new JsonLineDelimitedStreamWriter<>(request, response, JsonObject.class));
 
-        /*
+
         request.content().asPublisherOf(JsonObject.class).subscribe(
                 new Flow.Subscriber<JsonObject>() {
                     @Override
@@ -108,7 +108,7 @@ public class StreamingService implements Service {
                     @Override
                     public void onComplete() {
                     }
-                }); */
+                });
 
         // Create JSON object
         JsonObject msg = JSON.createObjectBuilder()
