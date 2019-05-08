@@ -140,7 +140,12 @@ public interface ServerResponse {
 
     <T> CompletionStage<ServerResponse> send(Flow.Publisher<T> content, Class<T> clazz);
 
-    <T> ServerResponse registerStreamWriter(MediaType contentType,
+    <T> ServerResponse registerStreamWriter(Predicate<Class<T>> predicate,
+                                            MediaType contentType,
+                                            Function<Flow.Publisher<T>, Flow.Publisher<DataChunk>> function);
+
+    <T> ServerResponse registerStreamWriter(Class<T> acceptType,
+                                            MediaType contentType,
                                             Function<Flow.Publisher<T>, Flow.Publisher<DataChunk>> function);
 
     <T> Flow.Publisher<DataChunk> createPublisherUsingWriter(T content);

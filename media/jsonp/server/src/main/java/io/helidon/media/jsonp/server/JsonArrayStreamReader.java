@@ -48,7 +48,7 @@ public class JsonArrayStreamReader<T> extends BaseStreamReader<T> {
         return new JsonArrayStreamProcessor(publisher);
     }
 
-    class JsonArrayStreamProcessor implements Flow.Publisher<T>, Flow.Subscriber<DataChunk> {
+    class JsonArrayStreamProcessor implements Flow.Processor<DataChunk, T> {
 
         private long itemsRequested;
         private boolean first = true;

@@ -25,15 +25,13 @@ import io.helidon.webserver.ServerResponse;
 import static io.helidon.media.common.ContentTypeCharset.determineCharset;
 
 /**
- * Class JsonArrayStreamWriter.
+ * Class JsonLineDelimitedStreamWriter.
  */
-public class JsonArrayStreamWriter<T> extends JsonStreamWriter<T> {
+public class JsonLineDelimitedStreamWriter<T> extends JsonStreamWriter<T> {
 
-    public JsonArrayStreamWriter(ServerRequest request, ServerResponse response, Class<T> type) {
+    public JsonLineDelimitedStreamWriter(ServerRequest request, ServerResponse response, Class<T> type) {
         super(request, response, type);
         Charset charset = determineCharset(request.headers());
-        super.beginChunk(DataChunk.create("[".getBytes(charset)));
-        super.separatorChunk(DataChunk.create(",".getBytes(charset)));
-        super.endChunk(DataChunk.create("]".getBytes(charset)));
+        super.separatorChunk(DataChunk.create(true, "\r\n".getBytes(charset)));
     }
 }

@@ -65,6 +65,10 @@ public final class MediaType implements AcceptPredicate<MediaType> {
      */
     public static final MediaType APPLICATION_JSON = createMediaType("application", "json");
     /**
+     * A {@link MediaType} constant representing {@code application/stream+json} media type.
+     */
+    public static final MediaType APPLICATION_STREAM_JSON = createMediaType("application", "stream+json");
+    /**
      * A {@link MediaType} constant representing {@code application/x-www-form-urlencoded} media type.
      */
     public static final MediaType APPLICATION_FORM_URLENCODED = createMediaType("application", "x-www-form-urlencoded");

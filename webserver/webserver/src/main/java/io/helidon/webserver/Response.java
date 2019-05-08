@@ -215,6 +215,7 @@ abstract class Response implements ServerResponse {
         }
     }
 
+    @SuppressWarnings("unchecked")
     <T> Flow.Publisher<DataChunk> createPublisherUsingStreamWriter(Flow.Publisher<T> content, Class<T> itemClass) {
         if (content == null) {
             return ReactiveStreamsAdapter.publisherToFlow(Mono.empty());
@@ -224,7 +225,7 @@ abstract class Response implements ServerResponse {
         synchronized (sendLockSupport) {
             for (int i = streamWriters.size() - 1; i >= 0; i--) {
                 StreamWriter<T> streamWriter = (StreamWriter<T>) streamWriters.get(i);
-                if (streamWriter.accept(content)) {
+                if (streamWriter.accept(itemClass)) {
                     return streamWriter.function.apply(content);
                 }
             }
@@ -234,10 +235,21 @@ abstract class Response implements ServerResponse {
     }
 
     @Override
-    public <T> ServerResponse registerStreamWriter(MediaType contentType,
+    public <T> ServerResponse registerStreamWriter(Class<T> acceptType,
+                                                   MediaType contentType,
                                                    Function<Flow.Publisher<T>, Flow.Publisher<DataChunk>> function) {
-        sendLockSupport.execute(() ->
-                getStreamWriters().add(new StreamWriter<>(contentType, function)),
+        return registerStreamWriter(
+                type -> type.isAssignableFrom(acceptType),
+                contentType,
+                function);
+    }
+
+    @Override
+    public <T> ServerResponse registerStreamWriter(Predicate<Class<T>> predicate,
+                                                   MediaType contentType,
+                                                   Function<Flow.Publisher<T>, Flow.Publisher<DataChunk>> function) {
+        sendLockSupport.execute(
+                () -> getStreamWriters().add(new StreamWriter<>(predicate, contentType, function)),
                 false);
         return this;
     }
@@ -396,10 +408,12 @@ abstract class Response implements ServerResponse {
         private final Predicate<Object> acceptPredicate;
         private final Function<T, Flow.Publisher<DataChunk>> function;
 
-        Writer(Predicate acceptPredicate, MediaType contentType, Function<T, Flow.Publisher<DataChunk>> function) {
+        @SuppressWarnings("unchecked")
+        Writer(Predicate<?> acceptPredicate,
+               MediaType contentType, Function<T, Flow.Publisher<DataChunk>> function) {
             super(contentType);
             Objects.requireNonNull(function, "Parameter function is null!");
-            this.acceptPredicate = acceptPredicate == null ? o -> true : acceptPredicate;
+            this.acceptPredicate = acceptPredicate == null ? o -> true : (Predicate<Object>) acceptPredicate;
             this.function = function;
         }
 
@@ -418,13 +432,25 @@ abstract class Response implements ServerResponse {
     }
 
     class StreamWriter<T> extends BaseWriter {
+        private final Predicate<Object> acceptPredicate;
         private final Function<Flow.Publisher<T>, Flow.Publisher<DataChunk>> function;
 
-        StreamWriter(MediaType contentType,
+        @SuppressWarnings("unchecked")
+        StreamWriter(Predicate<?> acceptPredicate,
+                     MediaType contentType,
                      Function<Flow.Publisher<T>, Flow.Publisher<DataChunk>> function) {
             super(contentType);
             Objects.requireNonNull(function, "Parameter function is null!");
+            this.acceptPredicate = acceptPredicate == null ? o -> true : (Predicate<Object>) acceptPredicate;
             this.function = function;
+        }
+
+        @Override
+        boolean accept(Object o) {
+            if (o == null || !acceptPredicate.test(o)) {
+                return false;
+            }
+            return super.accept(o);
         }
     }
 

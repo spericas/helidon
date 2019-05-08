@@ -22,9 +22,7 @@ import javax.json.JsonObject;
 import java.net.URISyntaxException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.text.Normalizer;
 import java.util.Collections;
-import java.util.List;
 import java.util.logging.Logger;
 
 import io.helidon.common.GenericType;
@@ -32,6 +30,7 @@ import io.helidon.common.http.FormParam;
 import io.helidon.common.http.MediaType;
 import io.helidon.common.reactive.Flow;
 import io.helidon.media.jsonp.server.JsonArrayStreamWriter;
+import io.helidon.media.jsonp.server.JsonLineDelimitedStreamWriter;
 import io.helidon.webserver.Routing;
 import io.helidon.webserver.ServerRequest;
 import io.helidon.webserver.ServerResponse;
@@ -78,10 +77,20 @@ public class StreamingService implements Service {
     }
 
     private void downloadJson(ServerRequest request, ServerResponse response) {
-        // Register stream writer -- should be moved to JsonSupport
-        response.registerStreamWriter(MediaType.APPLICATION_JSON,
+        // Register stream writers -- should be moved to JsonSupport
+        response.registerStreamWriter(
+                type -> type.isAssignableFrom(JsonObject.class)
+                        && request.headers().isAccepted(MediaType.APPLICATION_JSON),
+                MediaType.APPLICATION_JSON,
                 new JsonArrayStreamWriter<>(request, response, JsonObject.class));
 
+        response.registerStreamWriter(
+                type -> type.isAssignableFrom(JsonObject.class)
+                        && request.headers().isAccepted(MediaType.APPLICATION_STREAM_JSON),
+                MediaType.APPLICATION_STREAM_JSON,
+                new JsonLineDelimitedStreamWriter<>(request, response, JsonObject.class));
+
+        /*
         request.content().asPublisherOf(JsonObject.class).subscribe(
                 new Flow.Subscriber<JsonObject>() {
                     @Override
@@ -99,7 +108,7 @@ public class StreamingService implements Service {
                     @Override
                     public void onComplete() {
                     }
-                });
+                }); */
 
         // Create JSON object
         JsonObject msg = JSON.createObjectBuilder()
