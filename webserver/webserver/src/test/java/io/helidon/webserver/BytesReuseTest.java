@@ -59,6 +59,7 @@ import static org.junit.jupiter.api.Assertions.fail;
  * we no longer experience {@link OutOfMemoryError} exceptions in case the chunks aren't freed
  * as long as no references to the {@link DataChunk} instances are kept.
  */
+@Disabled
 public class BytesReuseTest {
 
     private static final Logger LOGGER = Logger.getLogger(PlainTest.class.getName());

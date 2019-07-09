@@ -56,7 +56,7 @@ class OriginThreadPublisher implements Flow.Publisher<DataChunk> {
     private volatile Throwable t;
 
     private final BlockingQueue<ByteBufRequestChunk> queue = new ArrayBlockingQueue<>(256);
-    private final ReferenceHoldingQueue<ByteBufRequestChunk> referenceQueue;
+    // private final ReferenceHoldingQueue<ByteBufRequestChunk> referenceQueue;
 
     private AtomicLong nextCount = new AtomicLong();
     private volatile long reqCount = 0;
@@ -72,7 +72,7 @@ class OriginThreadPublisher implements Flow.Publisher<DataChunk> {
      */
     OriginThreadPublisher(UnboundedSemaphore semaphore, ReferenceHoldingQueue<ByteBufRequestChunk> referenceQueue) {
         this.semaphore = semaphore;
-        this.referenceQueue = referenceQueue;
+        // this.referenceQueue = referenceQueue;
     }
 
     /**
@@ -198,7 +198,7 @@ class OriginThreadPublisher implements Flow.Publisher<DataChunk> {
         try {
             reentrantLock.lock();
 
-            ByteBufRequestChunk chunk = new ByteBufRequestChunk(data, referenceQueue);
+            ByteBufRequestChunk chunk = new ByteBufRequestChunk(data, null);
 
             if (!queue.offer(chunk)) {
                 LOGGER.severe("Unable to add an element to the publisher cache.");
@@ -225,7 +225,7 @@ class OriginThreadPublisher implements Flow.Publisher<DataChunk> {
             }
         } finally {
             reentrantLock.unlock();
-            referenceQueue.release();
+            // referenceQueue.release();
         }
     }
 
@@ -249,7 +249,7 @@ class OriginThreadPublisher implements Flow.Publisher<DataChunk> {
             throw new IllegalStateException("On error threw an exception!", e);
         } finally {
             reentrantLock.unlock();
-            referenceQueue.release();
+            // referenceQueue.release();
         }
     }
 
@@ -270,7 +270,7 @@ class OriginThreadPublisher implements Flow.Publisher<DataChunk> {
             }
         } finally {
             reentrantLock.unlock();
-            referenceQueue.release();
+            // referenceQueue.release();
         }
     }
 
