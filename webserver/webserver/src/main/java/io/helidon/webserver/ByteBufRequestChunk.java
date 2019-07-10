@@ -35,34 +35,35 @@ class ByteBufRequestChunk implements DataChunk {
     private final long id = ID_INCREMENTER.getAndIncrement();
 
     private final ByteBuffer byteBuffer;
+    private final ByteBuf byteBuf;
+
     // private final ReferenceHoldingQueue.ReleasableReference<ByteBufRequestChunk> ref;
 
     ByteBufRequestChunk(ByteBuf byteBuf, ReferenceHoldingQueue<ByteBufRequestChunk> referenceHoldingQueue) {
         Objects.requireNonNull(byteBuf, "The ByteBuf must not be null!");
 
-        byteBuffer = byteBuf.nioBuffer().asReadOnlyBuffer();
+        this.byteBuf = byteBuf;
+        this.byteBuffer = byteBuf.nioBuffer().asReadOnlyBuffer();
         // ref = new ReferenceHoldingQueue.ReleasableReference<>(this, referenceHoldingQueue, byteBuf::release);
         byteBuf.retain();
     }
 
     @Override
     public boolean isReleased() {
-        return true; // return ref.isReleased();
+        return byteBuf.refCnt() == 0;   // return ref.isReleased();
     }
 
     @Override
     public ByteBuffer data() {
-        /*
         if (isReleased()) {
             throw new IllegalStateException("The request chunk was already released!");
         }
-        */
         return byteBuffer;
     }
 
     @Override
     public void release() {
-        // ref.release();
+        byteBuf.release();  // ref.release();
     }
 
     @Override
@@ -79,12 +80,10 @@ class ByteBufRequestChunk implements DataChunk {
     @SuppressWarnings("checkstyle:NoFinalizer")
     @Override
     protected void finalize() {
-        /*
         if (!isReleased()) {
             OneTimeLoggerHolder.logOnce();
             release();
         }
-        */
     }
 
     // one time logger is designed to produce a warning only and only once in the JVM run
