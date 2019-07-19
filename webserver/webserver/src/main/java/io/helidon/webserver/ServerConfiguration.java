@@ -176,6 +176,13 @@ public interface ServerConfiguration extends SocketConfiguration {
     Context context();
 
     /**
+     * Checks if buffer leak detection logic in enabled/disabled.
+     *
+     * @return Outcome of test.
+     */
+    boolean bufferLeakDetection();
+
+    /**
      * Returns an {@link ExperimentalConfiguration}.
      *
      * @return Experimental configuration.
@@ -230,6 +237,7 @@ public interface ServerConfiguration extends SocketConfiguration {
         private final Map<String, SocketConfiguration> sockets = new HashMap<>();
         private int workers;
         private Tracer tracer;
+        private boolean bufferLeakDetection;
         private ExperimentalConfiguration experimental;
         private ContextualRegistry context;
 
@@ -436,6 +444,17 @@ public interface ServerConfiguration extends SocketConfiguration {
         }
 
         /**
+         * Enables/disables buffer leak detection logic.
+         *
+         * @param value a new value.
+         * @return an updated builder.
+         */
+        public Builder bufferLeakDetection(boolean value) {
+            bufferLeakDetection = value;
+            return this;
+        }
+
+        /**
          * Configure experimental features.
          * @param experimental experimental configuration
          * @return an updated builder
@@ -494,6 +513,11 @@ public interface ServerConfiguration extends SocketConfiguration {
                     String socketName = socketConfig.name();
                     sockets.put(socketName, configureSocket(socketConfig, SocketConfiguration.builder()).build());
                 }
+            }
+
+            Config leakDetection = config.get("buffer-leak-detection");
+            if (leakDetection.exists()) {
+                bufferLeakDetection(leakDetection.asBoolean().get());
             }
 
             // experimental
@@ -593,6 +617,10 @@ public interface ServerConfiguration extends SocketConfiguration {
 
         ExperimentalConfiguration experimental() {
             return experimental;
+        }
+
+        boolean bufferLeakDetection() {
+            return bufferLeakDetection;
         }
 
         ContextualRegistry context() {

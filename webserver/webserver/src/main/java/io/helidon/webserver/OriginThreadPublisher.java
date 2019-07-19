@@ -56,7 +56,7 @@ class OriginThreadPublisher implements Flow.Publisher<DataChunk> {
     private volatile Throwable t;
 
     private final BlockingQueue<ByteBufRequestChunk> queue = new ArrayBlockingQueue<>(256);
-    // private final ReferenceHoldingQueue<ByteBufRequestChunk> referenceQueue;
+    private final ReferenceHoldingQueue<ByteBufRequestChunk> referenceQueue;
 
     private AtomicLong nextCount = new AtomicLong();
     private volatile long reqCount = 0;
@@ -72,7 +72,7 @@ class OriginThreadPublisher implements Flow.Publisher<DataChunk> {
      */
     OriginThreadPublisher(UnboundedSemaphore semaphore, ReferenceHoldingQueue<ByteBufRequestChunk> referenceQueue) {
         this.semaphore = semaphore;
-        // this.referenceQueue = referenceQueue;
+        this.referenceQueue = referenceQueue;
     }
 
     /**
@@ -124,7 +124,6 @@ class OriginThreadPublisher implements Flow.Publisher<DataChunk> {
                                 release--;
 
                                 ByteBufRequestChunk item = queue.remove();
-                                LOGGER.finest(() -> "Publishing request chunk: " + item.id());
                                 singleSubscriber.onNext(item);
                             } finally {
                                 nexting = false;
@@ -198,7 +197,7 @@ class OriginThreadPublisher implements Flow.Publisher<DataChunk> {
         try {
             reentrantLock.lock();
 
-            ByteBufRequestChunk chunk = new ByteBufRequestChunk(data, null);
+            ByteBufRequestChunk chunk = new ByteBufRequestChunk(data, referenceQueue);
 
             if (!queue.offer(chunk)) {
                 LOGGER.severe("Unable to add an element to the publisher cache.");
@@ -224,8 +223,8 @@ class OriginThreadPublisher implements Flow.Publisher<DataChunk> {
                 error(new IllegalStateException("An error occurred when submitting data.", e));
             }
         } finally {
+            releaseQueuedChunks();
             reentrantLock.unlock();
-            // referenceQueue.release();
         }
     }
 
@@ -248,8 +247,8 @@ class OriginThreadPublisher implements Flow.Publisher<DataChunk> {
             // throwable consumption emitted another exception
             throw new IllegalStateException("On error threw an exception!", e);
         } finally {
+            releaseQueuedChunks();
             reentrantLock.unlock();
-            // referenceQueue.release();
         }
     }
 
@@ -269,8 +268,19 @@ class OriginThreadPublisher implements Flow.Publisher<DataChunk> {
                 LOGGER.finest("Not completing by the producing thread.");
             }
         } finally {
+            releaseQueuedChunks();
             reentrantLock.unlock();
-            // referenceQueue.release();
+        }
+    }
+
+    private void releaseQueuedChunks() {
+        if (referenceQueue != null) {
+            referenceQueue.release();
+        } else {
+            ByteBufRequestChunk item;
+            while ((item = queue.poll()) != null) {
+                item.release();
+            }
         }
     }
 

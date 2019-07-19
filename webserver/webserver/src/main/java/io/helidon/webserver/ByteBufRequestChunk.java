@@ -36,26 +36,30 @@ class ByteBufRequestChunk implements DataChunk {
 
     private final ByteBuffer byteBuffer;
     private final ByteBuf byteBuf;
+    private final boolean bufferLeakDetection;
 
-    // private final ReferenceHoldingQueue.ReleasableReference<ByteBufRequestChunk> ref;
+    private ReferenceHoldingQueue.ReleasableReference<ByteBufRequestChunk> ref;
 
-    ByteBufRequestChunk(ByteBuf byteBuf, ReferenceHoldingQueue<ByteBufRequestChunk> referenceHoldingQueue) {
+    ByteBufRequestChunk(ByteBuf byteBuf, ReferenceHoldingQueue<ByteBufRequestChunk> referenceQueue) {
         Objects.requireNonNull(byteBuf, "The ByteBuf must not be null!");
 
         this.byteBuf = byteBuf;
         this.byteBuffer = byteBuf.nioBuffer().asReadOnlyBuffer();
-        // ref = new ReferenceHoldingQueue.ReleasableReference<>(this, referenceHoldingQueue, byteBuf::release);
+        this.bufferLeakDetection = referenceQueue != null;
+        if (bufferLeakDetection) {
+            ref = new ReferenceHoldingQueue.ReleasableReference<>(this, referenceQueue, byteBuf::release);
+        }
         byteBuf.retain();
     }
 
     @Override
     public boolean isReleased() {
-        return byteBuf.refCnt() == 0;   // return ref.isReleased();
+        return !bufferLeakDetection || ref.isReleased();
     }
 
     @Override
     public ByteBuffer data() {
-        if (isReleased()) {
+        if (bufferLeakDetection && isReleased()) {
             throw new IllegalStateException("The request chunk was already released!");
         }
         return byteBuffer;
@@ -63,7 +67,9 @@ class ByteBufRequestChunk implements DataChunk {
 
     @Override
     public void release() {
-        byteBuf.release();  // ref.release();
+        if (bufferLeakDetection) {
+            ref.release();
+        }
     }
 
     @Override

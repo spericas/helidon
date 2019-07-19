@@ -54,7 +54,8 @@ public class ForwardingHandler extends SimpleChannelInboundHandler<Object> {
     private final Routing routing;
     private final NettyWebServer webServer;
     private final SSLEngine sslEngine;
-    // private final Queue<ReferenceHoldingQueue<ByteBufRequestChunk>> queues;
+    private final Queue<ReferenceHoldingQueue<ByteBufRequestChunk>> queues;
+    private final boolean bufferLeakDetection;
 
     // this field is always accessed by the very same thread; as such, it doesn't need to be
     // concurrency aware
@@ -67,7 +68,8 @@ public class ForwardingHandler extends SimpleChannelInboundHandler<Object> {
         this.routing = routing;
         this.webServer = webServer;
         this.sslEngine = sslEngine;
-        // this.queues = queues;
+        this.bufferLeakDetection = webServer.configuration().bufferLeakDetection();
+        this.queues = queues;
     }
 
     @Override
@@ -94,9 +96,12 @@ public class ForwardingHandler extends SimpleChannelInboundHandler<Object> {
             ctx.channel().config().setAutoRead(false);
 
             HttpRequest request = (HttpRequest) msg;
-            // ReferenceHoldingQueue<ByteBufRequestChunk> queue = new ReferenceHoldingQueue<>();
-            // queues.add(queue);
-            requestContext = new RequestContext(new HttpRequestScopedPublisher(ctx, null), request);
+            ReferenceHoldingQueue<ByteBufRequestChunk> queue = null;
+            if (bufferLeakDetection) {
+                queue = new ReferenceHoldingQueue<>();
+                queues.add(queue);
+            }
+            requestContext = new RequestContext(new HttpRequestScopedPublisher(ctx, queue), request);
             // the only reason we have the 'ref' here is that the field might get assigned with null
             HttpRequestScopedPublisher publisherRef = requestContext.publisher();
             long requestId = REQUEST_ID_GENERATOR.incrementAndGet();
@@ -113,6 +118,7 @@ public class ForwardingHandler extends SimpleChannelInboundHandler<Object> {
 
             BareResponseImpl bareResponse =
                     new BareResponseImpl(ctx, request, publisherRef::isCompleted, Thread.currentThread(), requestId);
+            final ReferenceHoldingQueue<ByteBufRequestChunk> finalQueue = queue;
             bareResponse.whenCompleted()
                         .thenRun(() -> {
                             RequestContext requestContext = this.requestContext;
@@ -123,11 +129,9 @@ public class ForwardingHandler extends SimpleChannelInboundHandler<Object> {
                             // Cleanup for these queues is done in HttpInitializer, but
                             // we try to do it here if possible to reduce memory usage,
                             // especially for keep-alive connections
-                            /*
-                            if (queue.release()) {
-                                queues.remove(queue);
+                            if (bufferLeakDetection && finalQueue.release()) {
+                                queues.remove(finalQueue);
                             }
-                            */
 
                             // Enable auto-read only after response has been completed
                             // to avoid a race condition with the next response

@@ -20,6 +20,8 @@ app:
 server:
   port: 8080
   host: 0.0.0.0
+  buffer-leak-detection: false
+
 #  ssl:
 #    private-key:
 #      keystore-resource-path: "certificate.p12"

@@ -39,6 +39,7 @@ class ServerBasicConfig implements ServerConfiguration {
     private final Map<String, SocketConfiguration> socketConfigs;
     private final ExperimentalConfiguration experimental;
     private final ContextualRegistry context;
+    private final boolean bufferLeakDetection;
 
     /**
      * Creates new instance.
@@ -51,6 +52,7 @@ class ServerBasicConfig implements ServerConfiguration {
         this.tracer = builder.tracer();
         this.experimental = builder.experimental();
         this.context = builder.context();
+        this.bufferLeakDetection = builder.bufferLeakDetection();
 
         HashMap<String, SocketConfiguration> map = new HashMap<>(builder.sockets());
         map.put(ServerConfiguration.DEFAULT_SOCKET_NAME, this.socketConfig);
@@ -115,6 +117,11 @@ class ServerBasicConfig implements ServerConfiguration {
     @Override
     public Context context() {
         return context;
+    }
+
+    @Override
+    public boolean bufferLeakDetection() {
+        return bufferLeakDetection;
     }
 
     static class SocketConfig implements SocketConfiguration {

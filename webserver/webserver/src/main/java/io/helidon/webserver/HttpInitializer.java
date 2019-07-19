@@ -50,25 +50,36 @@ class HttpInitializer extends ChannelInitializer<SocketChannel> {
     private final SslContext sslContext;
     private final NettyWebServer webServer;
     private final Routing routing;
-    // private final Queue<ReferenceHoldingQueue<ByteBufRequestChunk>> queues = new ConcurrentLinkedQueue<>();
+    private Queue<ReferenceHoldingQueue<ByteBufRequestChunk>> queues;
+    private final boolean bufferLeakDetection;
 
     HttpInitializer(SslContext sslContext, Routing routing, NettyWebServer webServer) {
         this.routing = routing;
         this.sslContext = sslContext;
         this.webServer = webServer;
+        this.bufferLeakDetection = webServer.configuration().bufferLeakDetection();
+    }
+
+    private Queue<ReferenceHoldingQueue<ByteBufRequestChunk>> getQueues() {
+        if (queues == null && bufferLeakDetection) {
+            queues = new ConcurrentLinkedQueue<>();
+        }
+        return queues;
     }
 
     private void clearQueues() {
-        // queues.removeIf(ReferenceHoldingQueue::release);
+        if (bufferLeakDetection) {
+            getQueues().removeIf(ReferenceHoldingQueue::release);
+        }
     }
 
     void queuesShutdown() {
-        /*
-        queues.removeIf(queue -> {
-            queue.shutdown();
-            return true;
-        });
-        */
+        if (bufferLeakDetection) {
+            getQueues().removeIf(queue -> {
+                queue.shutdown();
+                return true;
+            });
+        }
     }
 
     @Override
@@ -110,7 +121,7 @@ class HttpInitializer extends ChannelInitializer<SocketChannel> {
         }
 
         // Helidon's forwarding handler
-        p.addLast(new ForwardingHandler(routing, webServer, sslEngine, null));
+        p.addLast(new ForwardingHandler(routing, webServer, sslEngine, getQueues()));
 
         // Cleanup queues as part of event loop
         ch.eventLoop().execute(this::clearQueues);
