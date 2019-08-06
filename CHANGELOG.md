@@ -11,20 +11,41 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Improvements
 
-- WebServer: Access log support [800](https://github.com/oracle/helidon/pull/800)
+### Fixes
+
+## [1.2.0] - 2019-07-29
+
+### Notes
+
+This release contains full support for MicroProfile 2.2. We also have a few new 
+enhancements and bug and performances fixes.
+
+### Improvements
+
+- MicroProfile OpenTracing 1.3.1 [826](https://github.com/oracle/helidon/pull/826)
+- MicroProfile REST Client 1.2.1 [407](https://github.com/oracle/helidon/issues/407)
+- MicroProfile Health 2.0 [835](https://github.com/oracle/helidon/pull/835)
+- WebServer: Access log support [800](https://github.com/oracle/helidon/pull/800) [837](https://github.com/oracle/helidon/pull/837)
 - WebServer: Support for HTTP/2 negotiation with TLS/APLN [807](https://github.com/oracle/helidon/pull/807)
 - Config: credentials support added to git config [810](https://github.com/oracle/helidon/pull/801)
 - Early Access: support for the Oracle Universal Connection Pool [777](https://github.com/oracle/helidon/pull/777)
+- Early Access: JPA/JTA: Support analog to extended persistence contexts [639](https://github.com/oracle/helidon/issues/639)
 
 ### Fixes
 
 - WebServer: Return a 400 response for a request with an invalid URL [796](https://github.com/oracle/helidon/pull/796)
 - WebServer: Changes to content length optimization to handle flushes [783](https://github.com/oracle/helidon/pull/783)
 - WebServer: Refine content length support [795](https://github.com/oracle/helidon/pull/795)
-- Update jackson databind to 2.9.9 [797](https://github.com/oracle/helidon/pull/797)
+- Upgrade Jersey to 2.29 [813](https://github.com/oracle/helidon/pull/813)
+- Upgrade jackson databind to 2.9.9 [797](https://github.com/oracle/helidon/pull/797)
 - Enable Netty autoread only after completing a response [823](https://github.com/oracle/helidon/pull/823)
 - Tracing: add Tracing configuration module [809](https://github.com/oracle/helidon/pull/809)
 - Tracing: Fix constant sampler name for Jaeger [828](https://github.com/oracle/helidon/pull/828)
+- Tracing: IDCS Role mapper: calls to IDCS not associated with the call [794](https://github.com/oracle/helidon/issues/794)
+- Config: Enable support of application.yaml use case in data source injection extensions [847](https://github.com/oracle/helidon/pull/847)
+- Config: Correct traversal logic for MpConfig when acquiring configuration property names [845](https://github.com/oracle/helidon/pull/845)
+- MicroProfile Config: MpConfig will never include Helidon Config property names in the return value of getPropertyNames() [844](https://github.com/oracle/helidon/issues/844)
+- Update examples and tests to use microprofile-2.2 bundle [843](https://github.com/oracle/helidon/pull/843)
 
 ## [1.1.2] - 2019-06-14
 
@@ -370,7 +391,8 @@ for details.
 ### Notes
 - Initial source drop on Github
 
-[Unreleased]: https://github.com/oracle/helidon/compare/1.1.2...HEAD
+[Unreleased]: https://github.com/oracle/helidon/compare/1.2.0...HEAD
+[1.2.0]: https://github.com/oracle/helidon/compare/1.1.2...1.2.0
 [1.1.2]: https://github.com/oracle/helidon/compare/1.1.1...1.1.2
 [1.1.1]: https://github.com/oracle/helidon/compare/1.1.0...1.1.1
 [1.1.0]: https://github.com/oracle/helidon/compare/1.0.3...1.1.0
