@@ -69,6 +69,8 @@ class ByteBufRequestChunk implements DataChunk {
     public void release() {
         if (bufferLeakDetection) {
             ref.release();
+        } else {
+            byteBuf.release();
         }
     }
 
