@@ -19,9 +19,9 @@ package io.helidon.microprofile.metrics;
 import javax.enterprise.context.ApplicationScoped;
 import javax.enterprise.inject.Produces;
 
+import io.helidon.common.metrics.InternalMetricRegistryBridge;
 import io.helidon.metrics.RegistryFactory;
 
-import org.eclipse.microprofile.metrics.MetricRegistry;
 import org.eclipse.microprofile.metrics.MetricRegistry.Type;
 import org.eclipse.microprofile.metrics.annotation.RegistryType;
 
@@ -36,25 +36,25 @@ public final class RegistryProducer {
     }
 
     @Produces
-    public static MetricRegistry getDefaultRegistry() {
+    public static InternalMetricRegistryBridge getDefaultRegistry() {
         return getApplicationRegistry();
     }
 
     @Produces
     @RegistryType(type = Type.APPLICATION)
-    public static MetricRegistry getApplicationRegistry() {
+    public static InternalMetricRegistryBridge getApplicationRegistry() {
         return REGISTRY_FACTORY.getRegistry(Type.APPLICATION);
     }
 
     @Produces
     @RegistryType(type = Type.BASE)
-    public static MetricRegistry getBaseRegistry() {
+    public static InternalMetricRegistryBridge getBaseRegistry() {
         return REGISTRY_FACTORY.getRegistry(Type.BASE);
     }
 
     @Produces
     @RegistryType(type = Type.VENDOR)
-    public static MetricRegistry getVendorRegistry() {
+    public static InternalMetricRegistryBridge getVendorRegistry() {
         return REGISTRY_FACTORY.getRegistry(Type.VENDOR);
     }
 
@@ -63,7 +63,7 @@ public final class RegistryProducer {
      * all run on the same VM and must not interfere with each other.
      */
     static void clearApplicationRegistry() {
-        MetricRegistry applicationRegistry = getApplicationRegistry();
+        InternalMetricRegistryBridge applicationRegistry = getApplicationRegistry();
         applicationRegistry.getNames().forEach(applicationRegistry::remove);
     }
 }

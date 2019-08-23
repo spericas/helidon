@@ -19,9 +19,9 @@ package io.helidon.microprofile.faulttolerance;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Future;
 
+import io.helidon.common.metrics.InternalMetricRegistryBridge;
+
 import org.eclipse.microprofile.faulttolerance.exceptions.CircuitBreakerOpenException;
-import org.eclipse.microprofile.metrics.MetadataBuilder;
-import org.eclipse.microprofile.metrics.MetricRegistry;
 import org.eclipse.microprofile.metrics.MetricType;
 import org.eclipse.microprofile.metrics.MetricUnits;
 import org.junit.jupiter.api.Test;
@@ -78,12 +78,12 @@ public class MetricsTest extends FaultToleranceTest {
 
     @Test
     public void testInjectCounterProgrammatically() {
-        MetricRegistry metricRegistry = getMetricRegistry();
-        metricRegistry.counter(new MetadataBuilder()
-                .withName("dcounter")
-                .withType(MetricType.COUNTER)
-                .withUnit(MetricUnits.NONE)
-                .build());
+        InternalMetricRegistryBridge metricRegistry = getMetricRegistry();
+        metricRegistry.counter(metricRegistry.newMetadata("dcounter",
+                                            "",
+                                            "",
+                                            MetricType.COUNTER,
+                                            MetricUnits.NONE));
         metricRegistry.counter("dcounter").inc();
         assertThat(metricRegistry.counter("dcounter").getCount(), is(1L));
     }

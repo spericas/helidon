@@ -16,6 +16,7 @@
 
 package io.helidon.microprofile.metrics;
 
+import io.helidon.common.metrics.InternalMetricRegistryBridge;
 import java.lang.annotation.Annotation;
 import java.lang.reflect.AnnotatedElement;
 import java.lang.reflect.Member;
@@ -30,7 +31,6 @@ import javax.interceptor.AroundInvoke;
 import javax.interceptor.InvocationContext;
 
 import org.eclipse.microprofile.metrics.Metric;
-import org.eclipse.microprofile.metrics.MetricRegistry;
 
 import static io.helidon.microprofile.metrics.MetricUtil.getMetricName;
 import static io.helidon.microprofile.metrics.MetricUtil.lookupAnnotation;
@@ -72,17 +72,17 @@ import static io.helidon.microprofile.metrics.MetricUtil.lookupAnnotation;
 @Dependent
 abstract class InterceptorBase<T extends Metric, A extends Annotation> {
 
-    private final MetricRegistry registry;
+    private final InternalMetricRegistryBridge registry;
     private final Class<A> annotationClass;
     private final Function<A, String> nameFunction;
     private final Function<A, Boolean> isAbsoluteFunction;
-    private final Function<MetricRegistry, SortedMap<String, T>> metricsMapFunction;
+    private final Function<InternalMetricRegistryBridge, SortedMap<String, T>> metricsMapFunction;
     private final String metricTypeName;
-    InterceptorBase(MetricRegistry registry,
+    InterceptorBase(InternalMetricRegistryBridge registry,
                     Class<A> annotationClass,
                     Function<A, String> nameFunction,
                     Function<A, Boolean> isAbsoluteFunction,
-                    Function<MetricRegistry, SortedMap<String, T>> metricsMapFunction,
+                    Function<InternalMetricRegistryBridge, SortedMap<String, T>> metricsMapFunction,
                     String metricTypeName) {
         this.registry = registry;
         this.annotationClass = annotationClass;

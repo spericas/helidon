@@ -17,6 +17,7 @@
 package io.helidon.metrics;
 
 import io.helidon.common.CollectionsHelper;
+import io.helidon.common.metrics.InternalMetricRegistryBridge;
 import io.helidon.config.Config;
 import io.helidon.config.ConfigSources;
 
@@ -42,12 +43,12 @@ public class RegistryFactoryTest {
 
     private static RegistryFactory configured;
     private static RegistryFactory unconfigured;
-    private static MetricRegistry baseUn;
-    private static MetricRegistry appUn;
-    private static MetricRegistry vendorUn;
-    private static MetricRegistry base;
-    private static MetricRegistry app;
-    private static MetricRegistry vendor;
+    private static InternalMetricRegistryBridge baseUn;
+    private static InternalMetricRegistryBridge appUn;
+    private static InternalMetricRegistryBridge vendorUn;
+    private static InternalMetricRegistryBridge base;
+    private static InternalMetricRegistryBridge app;
+    private static InternalMetricRegistryBridge vendor;
     private static Registry vendorMod;
 
     @BeforeAll

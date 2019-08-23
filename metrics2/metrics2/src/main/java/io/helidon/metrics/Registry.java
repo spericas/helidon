@@ -16,6 +16,7 @@
 
 package io.helidon.metrics;
 
+import io.helidon.common.metrics.InternalMetricRegistryBridge;
 import java.util.AbstractMap;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -48,7 +49,7 @@ import org.eclipse.microprofile.metrics.Timer;
 /**
  * Metrics registry.
  */
-public class Registry extends MetricRegistry {
+public class Registry extends MetricRegistry implements InternalMetricRegistryBridge {
 
     private final Type type;
     private final Map<MetricID, MetricImpl> allMetrics = new ConcurrentHashMap<>();
@@ -79,13 +80,13 @@ public class Registry extends MetricRegistry {
     }
 
     @Override
-    public <T extends Metric> T register(Metadata metadata, T metric) throws IllegalArgumentException {
+    public <T extends Metric> T register(CompatibleMetadata metadata, T metric) throws IllegalArgumentException {
         return register(metadata, metric, tags(metadata.getName()));
     }
 
     @SuppressWarnings("unchecked")
     @Override
-    public <T extends Metric> T register(Metadata metadata, T metric, Tag... tags) throws IllegalArgumentException {
+    public <T extends Metric> T register(CompatibleMetadata metadata, T metric, Tag... tags) throws IllegalArgumentException {
         return (T) getOptionalMetric(metadata, metric, tags);
     }
 
@@ -95,7 +96,7 @@ public class Registry extends MetricRegistry {
     }
 
     @Override
-    public Counter counter(Metadata metadata) {
+    public Counter counter(CompatibleMetadata metadata) {
         return counter(metadata, tags(metadata.getName()));
     }
 
@@ -105,7 +106,7 @@ public class Registry extends MetricRegistry {
     }
 
     @Override
-    public Counter counter(Metadata metadata, Tag... tags) {
+    public Counter counter(CompatibleMetadata metadata, Tag... tags) {
         return (Counter) getOptionalMetric(metadata,
                 HelidonCounter.create(type.getName(), metadata),
                 tags);
@@ -117,7 +118,7 @@ public class Registry extends MetricRegistry {
     }
 
     @Override
-    public Histogram histogram(Metadata metadata) {
+    public Histogram histogram(CompatibleMetadata metadata) {
         return histogram(metadata, tags(metadata.getName()));
     }
 
@@ -127,7 +128,7 @@ public class Registry extends MetricRegistry {
     }
 
     @Override
-    public Histogram histogram(Metadata metadata, Tag... tags) {
+    public Histogram histogram(CompatibleMetadata metadata, Tag... tags) {
         return (Histogram) getOptionalMetric(metadata,
                 HelidonHistogram.create(type.getName(), metadata),
                 tags);
@@ -139,7 +140,7 @@ public class Registry extends MetricRegistry {
     }
 
     @Override
-    public Meter meter(Metadata metadata) {
+    public Meter meter(CompatibleMetadata metadata) {
         return meter(metadata, tags(metadata.getName()));
     }
 
@@ -149,7 +150,7 @@ public class Registry extends MetricRegistry {
     }
 
     @Override
-    public Meter meter(Metadata metadata, Tag... tags) {
+    public Meter meter(CompatibleMetadata metadata, Tag... tags) {
         return (Meter) getOptionalMetric(metadata,
                 HelidonMeter.create(type.getName(), metadata),
                 tags);
@@ -161,7 +162,7 @@ public class Registry extends MetricRegistry {
     }
 
     @Override
-    public Timer timer(Metadata metadata) {
+    public Timer timer(CompatibleMetadata metadata) {
         return timer(metadata, tags(metadata.getName()));
     }
 
@@ -171,7 +172,7 @@ public class Registry extends MetricRegistry {
     }
 
     @Override
-    public Timer timer(Metadata metadata, Tag... tags) {
+    public Timer timer(CompatibleMetadata metadata, Tag... tags) {
         return (Timer) getOptionalMetric(metadata,
                 HelidonTimer.create(type.getName(), metadata),
                 tags);
@@ -183,7 +184,7 @@ public class Registry extends MetricRegistry {
     }
 
     @Override
-    public ConcurrentGauge concurrentGauge(Metadata metadata) {
+    public ConcurrentGauge concurrentGauge(CompatibleMetadata metadata) {
         return concurrentGauge(metadata, tags(metadata.getName()));
     }
 
@@ -194,7 +195,7 @@ public class Registry extends MetricRegistry {
     }
 
     @Override
-    public ConcurrentGauge concurrentGauge(Metadata metadata, Tag... tags) {
+    public ConcurrentGauge concurrentGauge(CompatibleMetadata metadata, Tag... tags) {
         return (ConcurrentGauge) getOptionalMetric(metadata,
                 HelidonConcurrentGauge.create(type.getName(), metadata),
                 tags);
@@ -303,8 +304,8 @@ public class Registry extends MetricRegistry {
     }
 
     @Override
-    public Map<String, Metadata> getMetadata() {
-        HashMap<String, Metadata> result = new HashMap<>();
+    public Map<String, CompatibleMetadata> getMetadata() {
+        HashMap<String, CompatibleMetadata> result = new HashMap<>();
         allMetrics.forEach((id, metric) -> result.put(id.getName(), metric));
         return result;
     }
@@ -393,9 +394,9 @@ public class Registry extends MetricRegistry {
 
     // -- Private methods -----------------------------------------------------
 
-    private <T extends Metric> MetricImpl getOptionalMetric(Metadata metadata, T newMetric, Tag... tags) {
+    private <T extends Metric> MetricImpl getOptionalMetric(CompatibleMetadata metadata, T newMetric, Tag... tags) {
         // If same name regardless of tags, must have same metadata
-        Optional<Metadata> oldMetadata = findMetadataForName(metadata.getName());
+        Optional<CompatibleMetadata> oldMetadata = findMetadataForName(metadata.getName());
         oldMetadata.ifPresent(m -> {
             if (!m.isReusable()) {
                 throw new IllegalArgumentException("A metric of name '" + metadata.getName()
@@ -424,7 +425,7 @@ public class Registry extends MetricRegistry {
         return metric;
     }
 
-    private <T extends Metric> MetricImpl toImpl(Metadata metadata, T metric) {
+    private <T extends Metric> MetricImpl toImpl(CompatibleMetadata metadata, T metric) {
         switch (metadata.getTypeRaw()) {
             case COUNTER:
                 return HelidonCounter.create(type.getName(), metadata, (Counter) metric);
@@ -445,7 +446,7 @@ public class Registry extends MetricRegistry {
         }
     }
 
-    private <T extends Metric> Metadata toMetadata(String name, T metric) {
+    private <T extends Metric> CompatibleMetadata toMetadata(String name, T metric) {
         // Find subtype of Metric, needed for user-defined metrics
         Class<?> clazz = metric.getClass();
         do {
@@ -467,9 +468,9 @@ public class Registry extends MetricRegistry {
      * metrics of same name, regardless of tags, must have the same type.
      *
      * @param name Metric name.
-     * @return Metadata for name.
+     * @return CompatibleMetadata for name.
      */
-    private Optional<Metadata> findMetadataForName(String name) {
+    private Optional<CompatibleMetadata> findMetadataForName(String name) {
         if (!allMetricIDsByName.containsKey(name)) {
             return Optional.empty();
         }

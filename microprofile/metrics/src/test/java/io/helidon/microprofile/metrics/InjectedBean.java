@@ -19,11 +19,12 @@ package io.helidon.microprofile.metrics;
 import javax.enterprise.context.Dependent;
 import javax.inject.Inject;
 
+import io.helidon.common.metrics.InternalMetricRegistryBridge;
+
 import org.eclipse.microprofile.metrics.Counter;
 import org.eclipse.microprofile.metrics.Gauge;
 import org.eclipse.microprofile.metrics.Histogram;
 import org.eclipse.microprofile.metrics.Meter;
-import org.eclipse.microprofile.metrics.MetricRegistry;
 import org.eclipse.microprofile.metrics.Timer;
 import org.eclipse.microprofile.metrics.annotation.Metric;
 
@@ -46,7 +47,7 @@ public class InjectedBean {
     Histogram histogram;
 
     @Inject
-    MetricRegistry metrics;
+    InternalMetricRegistryBridge metrics;
 
     @Inject
     @Metric(name = GaugedBean.INJECTABLE_GAUGE_NAME, absolute = true)

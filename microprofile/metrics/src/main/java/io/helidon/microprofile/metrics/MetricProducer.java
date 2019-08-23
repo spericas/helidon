@@ -16,6 +16,8 @@
 
 package io.helidon.microprofile.metrics;
 
+import io.helidon.common.metrics.InternalMetricRegistryBridge;
+import io.helidon.common.metrics.InternalMetricRegistryBridge.CompatibleMetadata;
 import java.lang.reflect.Constructor;
 
 import javax.enterprise.context.ApplicationScoped;
@@ -27,7 +29,6 @@ import org.eclipse.microprofile.metrics.Gauge;
 import org.eclipse.microprofile.metrics.Histogram;
 import org.eclipse.microprofile.metrics.Metadata;
 import org.eclipse.microprofile.metrics.Meter;
-import org.eclipse.microprofile.metrics.MetricRegistry;
 import org.eclipse.microprofile.metrics.MetricType;
 import org.eclipse.microprofile.metrics.MetricUnits;
 import org.eclipse.microprofile.metrics.Timer;
@@ -39,7 +40,7 @@ import org.eclipse.microprofile.metrics.annotation.Metric;
 @ApplicationScoped
 public class MetricProducer {
 
-    private static Metadata newMetadata(InjectionPoint ip, Metric metric, MetricType metricType) {
+    private static CompatibleMetadata newMetadata(InjectionPoint ip, Metric metric, MetricType metricType) {
         return metric == null ? new Metadata(getName(ip),
                                              "",
                                              "",
@@ -83,49 +84,49 @@ public class MetricProducer {
     }
 
     @Produces
-    private Counter produceCounterDefault(MetricRegistry registry, InjectionPoint ip) {
+    private Counter produceCounterDefault(InternalMetricRegistryBridge registry, InjectionPoint ip) {
         return produceCounter(registry, ip);
     }
 
     @Produces
     @VendorDefined
-    private Counter produceCounter(MetricRegistry registry, InjectionPoint ip) {
+    private Counter produceCounter(InternalMetricRegistryBridge registry, InjectionPoint ip) {
         Metric metric = ip.getAnnotated().getAnnotation(Metric.class);
         return registry.counter(newMetadata(ip, metric, MetricType.COUNTER));
     }
 
     @Produces
-    private Meter produceMeterDefault(MetricRegistry registry, InjectionPoint ip) {
+    private Meter produceMeterDefault(InternalMetricRegistryBridge registry, InjectionPoint ip) {
         return produceMeter(registry, ip);
     }
 
     @Produces
     @VendorDefined
-    private Meter produceMeter(MetricRegistry registry, InjectionPoint ip) {
+    private Meter produceMeter(InternalMetricRegistryBridge registry, InjectionPoint ip) {
         Metric metric = ip.getAnnotated().getAnnotation(Metric.class);
         return registry.meter(newMetadata(ip, metric, MetricType.METERED));
     }
 
     @Produces
-    private Timer produceTimerDefault(MetricRegistry registry, InjectionPoint ip) {
+    private Timer produceTimerDefault(InternalMetricRegistryBridge registry, InjectionPoint ip) {
         return produceTimer(registry, ip);
     }
 
     @Produces
     @VendorDefined
-    private Timer produceTimer(MetricRegistry registry, InjectionPoint ip) {
+    private Timer produceTimer(InternalMetricRegistryBridge registry, InjectionPoint ip) {
         Metric metric = ip.getAnnotated().getAnnotation(Metric.class);
         return registry.timer(newMetadata(ip, metric, MetricType.TIMER));
     }
 
     @Produces
-    private Histogram produceHistogramDefault(MetricRegistry registry, InjectionPoint ip) {
+    private Histogram produceHistogramDefault(InternalMetricRegistryBridge registry, InjectionPoint ip) {
         return produceHistogram(registry, ip);
     }
 
     @Produces
     @VendorDefined
-    private Histogram produceHistogram(MetricRegistry registry, InjectionPoint ip) {
+    private Histogram produceHistogram(InternalMetricRegistryBridge registry, InjectionPoint ip) {
         Metric metric = ip.getAnnotated().getAnnotation(Metric.class);
         return registry.histogram(newMetadata(ip, metric, MetricType.HISTOGRAM));
     }
@@ -141,7 +142,7 @@ public class MetricProducer {
     @Produces
     @VendorDefined
     @SuppressWarnings("unchecked")
-    private <T> Gauge<T> produceGauge(MetricRegistry registry, InjectionPoint ip) {
+    private <T> Gauge<T> produceGauge(InternalMetricRegistryBridge registry, InjectionPoint ip) {
         Metric metric = ip.getAnnotated().getAnnotation(Metric.class);
         return (Gauge<T>) registry.getGauges().entrySet().stream()
                 .filter(entry -> entry.getKey().equals(metric.name()))
@@ -159,7 +160,7 @@ public class MetricProducer {
      * @return requested gauge
      */
     @Produces
-    private <T> Gauge<T> produceGaugeDefault(MetricRegistry registry, InjectionPoint ip) {
+    private <T> Gauge<T> produceGaugeDefault(InternalMetricRegistryBridge registry, InjectionPoint ip) {
         return produceGauge(registry, ip);
     }
 }

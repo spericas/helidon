@@ -16,13 +16,13 @@
 
 package io.helidon.microprofile.metrics;
 
+import io.helidon.common.metrics.InternalMetricRegistryBridge;
 import javax.annotation.Priority;
 import javax.inject.Inject;
 import javax.interceptor.Interceptor;
 import javax.interceptor.InvocationContext;
 
 import org.eclipse.microprofile.metrics.Counter;
-import org.eclipse.microprofile.metrics.MetricRegistry;
 import org.eclipse.microprofile.metrics.annotation.Counted;
 
 /**
@@ -34,12 +34,12 @@ import org.eclipse.microprofile.metrics.annotation.Counted;
 final class InterceptorCounted extends InterceptorBase<Counter, Counted> {
 
     @Inject
-    InterceptorCounted(MetricRegistry registry) {
+    InterceptorCounted(InternalMetricRegistryBridge registry) {
         super(registry,
               Counted.class,
               Counted::name,
               Counted::absolute,
-              MetricRegistry::getCounters,
+              InternalMetricRegistryBridge::getCounters,
               "counter");
     }
 

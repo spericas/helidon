@@ -16,13 +16,13 @@
 
 package io.helidon.microprofile.metrics;
 
+import io.helidon.common.metrics.InternalMetricRegistryBridge;
 import javax.annotation.Priority;
 import javax.inject.Inject;
 import javax.interceptor.Interceptor;
 import javax.interceptor.InvocationContext;
 
 import org.eclipse.microprofile.metrics.Meter;
-import org.eclipse.microprofile.metrics.MetricRegistry;
 import org.eclipse.microprofile.metrics.annotation.Metered;
 
 /**
@@ -34,12 +34,12 @@ import org.eclipse.microprofile.metrics.annotation.Metered;
 final class InterceptorMetered extends InterceptorBase<Meter, Metered> {
 
     @Inject
-    InterceptorMetered(MetricRegistry registry) {
+    InterceptorMetered(InternalMetricRegistryBridge registry) {
         super(registry,
               Metered.class,
               Metered::name,
               Metered::absolute,
-              MetricRegistry::getMeters,
+              InternalMetricRegistryBridge::getMeters,
               "meter");
     }
 

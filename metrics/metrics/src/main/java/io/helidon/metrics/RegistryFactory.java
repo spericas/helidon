@@ -20,6 +20,7 @@ import java.util.EnumMap;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Supplier;
 
+import io.helidon.common.metrics.InternalMetricRegistryBridge;
 import io.helidon.config.Config;
 
 import org.eclipse.microprofile.metrics.MetricRegistry;
@@ -150,7 +151,22 @@ public final class RegistryFactory {
      * @param type type of registry
      * @return Registry for the type defined.
      */
-    public MetricRegistry getRegistry(Type type) {
+    public InternalMetricRegistryBridge getRegistry(Type type) {
+        return getRegistryInternal(type);
+    }
+
+    /**
+     * Gets a registry based on its type as an interface that is independent
+     * of the underlying metrics implementation version.
+     *
+     * @param type type of registry
+     * @return InternalMetricRegistryBridge for the requested type
+     */
+    public InternalMetricRegistryBridge getInternalRegistryBridge(Type type) {
+        return getRegistryInternal(type);
+    }
+
+    private Registry getRegistryInternal(Type type) {
         if (type == Type.BASE) {
             ensureBase();
         }

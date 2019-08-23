@@ -25,6 +25,8 @@ module io.helidon.microprofile.faulttolerance {
 
     requires io.helidon.common.context;
     requires io.helidon.common.configurable;
+    requires io.helidon.common.metrics;
+    requires io.helidon.metrics;
     requires io.helidon.microprofile.config;
     requires io.helidon.microprofile.server;
 

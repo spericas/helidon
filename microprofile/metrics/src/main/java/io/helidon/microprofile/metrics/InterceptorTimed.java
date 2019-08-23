@@ -16,12 +16,12 @@
 
 package io.helidon.microprofile.metrics;
 
+import io.helidon.common.metrics.InternalMetricRegistryBridge;
 import javax.annotation.Priority;
 import javax.inject.Inject;
 import javax.interceptor.Interceptor;
 import javax.interceptor.InvocationContext;
 
-import org.eclipse.microprofile.metrics.MetricRegistry;
 import org.eclipse.microprofile.metrics.Timer;
 import org.eclipse.microprofile.metrics.annotation.Timed;
 
@@ -34,12 +34,12 @@ import org.eclipse.microprofile.metrics.annotation.Timed;
 final class InterceptorTimed extends InterceptorBase<Timer, Timed> {
 
     @Inject
-    InterceptorTimed(MetricRegistry registry) {
+    InterceptorTimed(InternalMetricRegistryBridge registry) {
         super(registry,
               Timed.class,
               Timed::name,
               Timed::absolute,
-              MetricRegistry::getTimers,
+                InternalMetricRegistryBridge::getTimers,
               "timer");
     }
 

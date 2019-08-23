@@ -32,6 +32,7 @@ import io.grpc.ServerCall;
 import io.grpc.ServerCallHandler;
 import io.grpc.Status;
 import io.grpc.stub.StreamObserver;
+import io.helidon.common.metrics.InternalMetricRegistryBridge;
 import org.eclipse.microprofile.metrics.Counter;
 import org.eclipse.microprofile.metrics.Histogram;
 import org.eclipse.microprofile.metrics.Meter;
@@ -65,9 +66,9 @@ import static org.mockito.Mockito.when;
 @SuppressWarnings("unchecked")
 public class GrpcMetricsInterceptorIT {
 
-    private static MetricRegistry vendorRegsistry;
+    private static InternalMetricRegistryBridge vendorRegsistry;
 
-    private static MetricRegistry appRegistry;
+    private static InternalMetricRegistryBridge appRegistry;
 
     private static Meter vendorMeter;
 
@@ -190,6 +191,7 @@ public class GrpcMetricsInterceptorIT {
         Counter appCounter = appRegistry.counter("Foo.barTags");
 
         assertVendorMetrics();
+        // TODO - Need to get tags in some version-independent way, not directly from the metric
         assertThat(appCounter.toString(), containsString("tags='{one=t1, two=t2}'"));
     }
 

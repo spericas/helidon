@@ -19,13 +19,14 @@ package io.helidon.microprofile.metrics;
 import javax.ws.rs.client.Client;
 import javax.ws.rs.client.ClientBuilder;
 
+import io.helidon.common.metrics.InternalMetricRegistryBridge;
+import io.helidon.common.metrics.InternalMetricRegistryBridge.CompatibleMetadata;
 import io.helidon.config.Config;
 import io.helidon.metrics.RegistryFactory;
 import io.helidon.microprofile.config.MpConfig;
 import io.helidon.microprofile.server.Server;
 
 import org.eclipse.microprofile.metrics.Counter;
-import org.eclipse.microprofile.metrics.Metadata;
 import org.eclipse.microprofile.metrics.MetricRegistry;
 import org.eclipse.microprofile.metrics.MetricType;
 import org.eclipse.microprofile.metrics.MetricUnits;
@@ -37,7 +38,7 @@ import org.junit.jupiter.api.BeforeAll;
  */
 public class MetricsMpServiceTest {
     protected static Server server;
-    protected static MetricRegistry registry;
+    protected static InternalMetricRegistryBridge registry;
     protected static Client client = ClientBuilder.newClient();
 
     private static int port;
@@ -70,12 +71,11 @@ public class MetricsMpServiceTest {
     }
 
     protected static void registerCounter(String name) {
-        Metadata meta = new Metadata(name,
+        CompatibleMetadata meta = registry.newMetadata(name,
                                      name,
                                      name,
                                      MetricType.COUNTER,
-                                     MetricUnits.NONE,
-                                     "");
+                                     MetricUnits.NONE);
         registry.counter(meta);
     }
 

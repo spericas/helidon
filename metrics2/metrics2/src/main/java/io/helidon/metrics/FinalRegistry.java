@@ -57,12 +57,12 @@ final class FinalRegistry extends Registry {
     }
 
     @Override
-    public <T extends Metric> T register(Metadata metadata, T metric) throws IllegalArgumentException {
+    public <T extends Metric> T register(CompatibleMetadata metadata, T metric) throws IllegalArgumentException {
         throw cannotRegister(metadata.getName());
     }
 
     @Override
-    public <T extends Metric> T register(Metadata metadata, T metric, Tag... tags) throws IllegalArgumentException {
+    public <T extends Metric> T register(CompatibleMetadata metadata, T metric, Tag... tags) throws IllegalArgumentException {
         throw cannotRegister(metadata.getName());
     }
 
@@ -72,12 +72,12 @@ final class FinalRegistry extends Registry {
     }
 
     @Override
-    public Counter counter(Metadata metadata) {
+    public Counter counter(CompatibleMetadata metadata) {
         return counter(metadata.getName(), EMPTY_TAGS);
     }
 
     @Override
-    public Counter counter(Metadata metadata, Tag... tags) {
+    public Counter counter(CompatibleMetadata metadata, Tag... tags) {
         return counter(metadata.getName(), tags);
     }
 
@@ -94,12 +94,12 @@ final class FinalRegistry extends Registry {
     }
 
     @Override
-    public Histogram histogram(Metadata metadata) {
+    public Histogram histogram(CompatibleMetadata metadata) {
         return histogram(metadata.getName(), EMPTY_TAGS);
     }
 
     @Override
-    public Histogram histogram(Metadata metadata, Tag... tags) {
+    public Histogram histogram(CompatibleMetadata metadata, Tag... tags) {
         return histogram(metadata.getName(), tags);
     }
 
@@ -116,12 +116,12 @@ final class FinalRegistry extends Registry {
     }
 
     @Override
-    public Meter meter(Metadata metadata) {
+    public Meter meter(CompatibleMetadata metadata) {
         return meter(metadata.getName(), EMPTY_TAGS);
     }
 
     @Override
-    public Meter meter(Metadata metadata, Tag... tags) {
+    public Meter meter(CompatibleMetadata metadata, Tag... tags) {
         return meter(metadata.getName(), tags);
     }
 
@@ -138,12 +138,12 @@ final class FinalRegistry extends Registry {
     }
 
     @Override
-    public Timer timer(Metadata metadata) {
+    public Timer timer(CompatibleMetadata metadata) {
         return timer(metadata.getName(), EMPTY_TAGS);
     }
 
     @Override
-    public Timer timer(Metadata metadata, Tag... tags) {
+    public Timer timer(CompatibleMetadata metadata, Tag... tags) {
         return timer(metadata.getName(), tags);
     }
 
@@ -160,12 +160,12 @@ final class FinalRegistry extends Registry {
     }
 
     @Override
-    public ConcurrentGauge concurrentGauge(Metadata metadata) {
+    public ConcurrentGauge concurrentGauge(CompatibleMetadata metadata) {
         return concurrentGauge(metadata.getName(), EMPTY_TAGS);
     }
 
     @Override
-    public ConcurrentGauge concurrentGauge(Metadata metadata, Tag... tags) {
+    public ConcurrentGauge concurrentGauge(CompatibleMetadata metadata, Tag... tags) {
         return concurrentGauge(metadata.getName(), tags);
     }
 
@@ -262,7 +262,7 @@ final class FinalRegistry extends Registry {
     }
 
     @Override
-    public Map<String, Metadata> getMetadata() {
+    public Map<String, CompatibleMetadata> getMetadata() {
         return delegate.getMetadata();
     }
 

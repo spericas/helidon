@@ -29,6 +29,9 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import io.helidon.common.metrics.InternalMetricRegistryBridge;
+import java.util.AbstractMap;
+
 import org.eclipse.microprofile.metrics.Counter;
 import org.eclipse.microprofile.metrics.Gauge;
 import org.eclipse.microprofile.metrics.Histogram;
@@ -43,7 +46,7 @@ import org.eclipse.microprofile.metrics.Timer;
 /**
  * Metrics registry.
  */
-class Registry extends MetricRegistry {
+class Registry extends MetricRegistry implements InternalMetricRegistryBridge {
     private final Type type;
     private final Map<String, MetricImpl> allMetrics = new ConcurrentHashMap<>();
 
@@ -291,6 +294,218 @@ class Registry extends MetricRegistry {
         }
 
         return type.cast(metric);
+    }
+
+    /*
+     * ====================================================================================
+     *
+     * THe following methods and the inner class help support code that needs to
+     * build against both MP metrics 1.x and 2.x without change.
+     */
+
+    @Override
+    public <T extends Metric> T register(CompatibleMetadata metadata, T metric) throws IllegalArgumentException {
+        return register(toImpl(PrivateMetadata.class.cast(metadata).delegate, metric));
+    }
+
+    @Override
+    public <T extends Metric> T register(CompatibleMetadata metadata, T metric, Map<String, String> tags) {
+        return register(toImpl(combine(metadata, tags), metric));
+    }
+
+    @Override
+    public CompatibleMetadata newMetadata(String name, String displayName, String description, MetricType type, String unit) {
+        return new PrivateMetadata(name, displayName, description, type, unit);
+    }
+
+    @Override
+    public CompatibleMetadata newMetadata(String name, MetricType type) {
+        return new PrivateMetadata(name, type);
+    }
+
+    @Override
+    public Counter counter(CompatibleMetadata metadata) {
+        return counter(delegate(metadata));
+    }
+
+    @Override
+    public Counter counter(CompatibleMetadata metadata, Map<String, String> tags) {
+        return counter(combine(metadata, tags));
+    }
+
+    @Override
+    public Histogram histogram(CompatibleMetadata metadata) {
+        return histogram(delegate(metadata));
+    }
+
+    @Override
+    public Histogram histogram(CompatibleMetadata metadata, Map<String, String> tags) {
+        return histogram(combine(metadata, tags));
+    }
+
+    @Override
+    public Meter meter(CompatibleMetadata metadata) {
+        return meter(delegate(metadata));
+    }
+
+    @Override
+    public Meter meter(CompatibleMetadata metadata, Map<String, String> tags) {
+        return meter(combine(metadata, tags));
+    }
+
+    @Override
+    public Timer timer(CompatibleMetadata metadata) {
+        return timer(delegate(metadata));
+    }
+
+    @Override
+    public Timer timer(CompatibleMetadata metadata, Map<String, String> tags) {
+        return timer(combine(metadata, tags));
+    }
+
+    @Override
+    public Map<String, ? extends Metric> metricsViaNames() {
+        return allMetrics;
+    }
+
+    @Override
+    public SortedMap<String, Gauge> gaugesViaNames() {
+        return getGauges();
+    }
+
+    private PrivateMetadata cast(CompatibleMetadata metadata) {
+        return PrivateMetadata.class.cast(metadata);
+    }
+
+    private Metadata delegate(CompatibleMetadata metadata) {
+        return cast(metadata).delegate;
+    }
+
+    private Metadata combine(CompatibleMetadata metadata, Map<String, String> tags) {
+        final Metadata md = cast(metadata).copy();
+        md.getTags().putAll(tags);
+        return md;
+    }
+
+    private static class PrivateMetadata implements io.helidon.common.metrics.InternalMetricRegistryBridge.CompatibleMetadata {
+
+        private final org.eclipse.microprofile.metrics.Metadata delegate;
+
+        private PrivateMetadata(String name, String displayName, String description,
+                MetricType type, String unit) {
+            delegate = new org.eclipse.microprofile.metrics.Metadata(
+                name, displayName, description, type, unit);
+        }
+
+        private PrivateMetadata(String name, MetricType type) {
+            delegate = new org.eclipse.microprofile.metrics.Metadata(
+                name, type);
+        }
+
+        public Metadata copy() {
+            final Metadata result = new Metadata(delegate.getName(), delegate.getDisplayName(),
+                    delegate.getDescription(), MetricType.from(delegate.getType()),
+                    delegate.getUnit());
+            result.setReusable(delegate.isReusable());
+            return result;
+        }
+
+        @Override
+        public String getName() {
+            return delegate.getName();
+        }
+
+        public void setName(String name) {
+            delegate.setName(name);
+        }
+
+        @Override
+        public String getDisplayName() {
+            return delegate.getDisplayName();
+        }
+
+        public void setDisplayName(String displayName) {
+            delegate.setDisplayName(displayName);
+        }
+
+        @Override
+        public Optional<String> getDescription() {
+            return Optional.ofNullable(delegate.getDescription());
+        }
+
+        @Override
+        public void setDescription(String description) {
+            delegate.setDescription(description);
+        }
+
+        @Override
+        public String getType() {
+            return delegate.getType();
+        }
+
+        @Override
+        public MetricType getTypeRaw() {
+            return delegate.getTypeRaw();
+        }
+
+        public void setType(String type) throws IllegalArgumentException {
+            delegate.setType(type);
+        }
+
+        public void setType(MetricType type) {
+            delegate.setType(type);
+        }
+
+        @Override
+        public Optional<String> getUnit() {
+            return Optional.ofNullable(delegate.getUnit());
+        }
+
+        @Override
+        public void setUnit(String unit) {
+            delegate.setUnit(unit);
+        }
+
+        @Override
+        public boolean isReusable() {
+            return delegate.isReusable();
+        }
+
+        public void setReusable(boolean reusable) {
+            delegate.setReusable(reusable);
+        }
+
+        public String getTagsAsString() {
+            return delegate.getTagsAsString();
+        }
+
+        public HashMap<String, String> getTags() {
+            return delegate.getTags();
+        }
+
+        public void addTag(String kvString) {
+            delegate.addTag(kvString);
+        }
+
+        public void addTags(String tagsString) {
+            delegate.addTags(tagsString);
+        }
+
+        public void setTags(HashMap<String, String> tags) {
+            delegate.setTags(tags);
+        }
+
+        @Override
+        public int hashCode() {
+            return delegate.hashCode();
+        }
+
+        @Override
+        public String toString() {
+            return delegate.toString();
+        }
+
+
     }
 
 }

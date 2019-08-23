@@ -54,14 +54,14 @@ final class BaseRegistry extends Registry {
 
     private static final String CONFIG_METRIC_ENABLED_BASE = "base.";
 
-    private static final Metadata MEMORY_USED_HEAP =
+    private static final CompatibleMetadata MEMORY_USED_HEAP =
             new HelidonMetadata("memory.usedHeap",
                     "Used Heap Memory",
                     "Displays the amount of used heap memory in bytes.",
                     MetricType.GAUGE,
                     MetricUnits.BYTES);
 
-    private static final Metadata MEMORY_COMMITTED_HEAP =
+    private static final CompatibleMetadata MEMORY_COMMITTED_HEAP =
             new HelidonMetadata("memory.committedHeap",
                     "Committed Heap Memory",
                     "Displays the amount of memory in bytes that is "
@@ -72,7 +72,7 @@ final class BaseRegistry extends Registry {
                     MetricType.GAUGE,
                     MetricUnits.BYTES);
 
-    private static final Metadata MEMORY_MAX_HEAP =
+    private static final CompatibleMetadata MEMORY_MAX_HEAP =
             new HelidonMetadata("memory.maxHeap",
                     "Max Heap Memory",
                     "Displays the maximum amount of heap memory in bytes that can"
@@ -90,7 +90,7 @@ final class BaseRegistry extends Registry {
                     MetricType.GAUGE,
                     MetricUnits.BYTES);
 
-    private static final Metadata JVM_UPTIME =
+    private static final CompatibleMetadata JVM_UPTIME =
             new HelidonMetadata("jvm.uptime",
                     "JVM Uptime",
                     "Displays the start time of the Java virtual machine in "
@@ -101,7 +101,7 @@ final class BaseRegistry extends Registry {
                     MetricType.GAUGE,
                     MetricUnits.MILLISECONDS);
 
-    private static final Metadata THREAD_COUNT =
+    private static final CompatibleMetadata THREAD_COUNT =
             new HelidonMetadata("thread.count",
                     "Thread Count",
                     "Displays the current number of live threads including both "
@@ -109,14 +109,14 @@ final class BaseRegistry extends Registry {
                     MetricType.GAUGE,
                     MetricUnits.NONE);
 
-    private static final Metadata THREAD_DAEMON_COUNT =
+    private static final CompatibleMetadata THREAD_DAEMON_COUNT =
             new HelidonMetadata("thread.daemon.count",
                     "Daemon Thread Count",
                     "Displays the current number of live daemon threads.",
                     MetricType.GAUGE,
                     MetricUnits.NONE);
 
-    private static final Metadata THREAD_MAX_COUNT =
+    private static final CompatibleMetadata THREAD_MAX_COUNT =
             new HelidonMetadata("thread.max.count",
                     "Peak Thread Count",
                     "Displays the peak live thread count since the Java "
@@ -126,7 +126,7 @@ final class BaseRegistry extends Registry {
                     MetricType.GAUGE,
                     MetricUnits.NONE);
 
-    private static final Metadata CL_LOADED_COUNT =
+    private static final CompatibleMetadata CL_LOADED_COUNT =
             new HelidonMetadata("classloader.loadedClasses.count",
                     "Current Loaded Class Count",
                     "Displays the number of classes that are currently loaded in "
@@ -134,7 +134,7 @@ final class BaseRegistry extends Registry {
                     MetricType.GAUGE,
                     MetricUnits.NONE);
 
-    private static final Metadata CL_LOADED_TOTAL =
+    private static final CompatibleMetadata CL_LOADED_TOTAL =
             new HelidonMetadata("classloader.loadedClasses.total",
                     "Total Loaded Class Count",
                     "Displays the total number of classes that have been loaded "
@@ -142,7 +142,7 @@ final class BaseRegistry extends Registry {
                     MetricType.COUNTER,
                     MetricUnits.NONE);
 
-    private static final Metadata CL_UNLOADED_COUNT =
+    private static final CompatibleMetadata CL_UNLOADED_COUNT =
             new HelidonMetadata("classloader.unloadedClasses.total",
                     "Total Unloaded Class Count",
                     "Displays the total number of classes unloaded since the Java "
@@ -150,7 +150,7 @@ final class BaseRegistry extends Registry {
                     MetricType.COUNTER,
                     MetricUnits.NONE);
 
-    private static final Metadata OS_AVAILABLE_CPU =
+    private static final CompatibleMetadata OS_AVAILABLE_CPU =
             new HelidonMetadata("cpu.availableProcessors",
                     "Available Processors",
                     "Displays the number of processors available to the Java "
@@ -160,7 +160,7 @@ final class BaseRegistry extends Registry {
                     MetricType.GAUGE,
                     MetricUnits.NONE);
 
-    private static final Metadata OS_LOAD_AVERAGE =
+    private static final CompatibleMetadata OS_LOAD_AVERAGE =
             new HelidonMetadata("cpu.systemLoadAverage",
                     "System Load Average",
                     "Displays the system load average for the last minute. The "
@@ -231,7 +231,7 @@ final class BaseRegistry extends Registry {
         return result;
     }
 
-    private static Metadata gcTimeMeta() {
+    private static CompatibleMetadata gcTimeMeta() {
         return new HelidonMetadata("gc.time",
                             "Garbage Collection Time",
                             "Displays the approximate accumulated collection elapsed time in milliseconds. "
@@ -244,7 +244,7 @@ final class BaseRegistry extends Registry {
                             MetricUnits.MILLISECONDS);
     }
 
-    private static Metadata gcCountMeta() {
+    private static CompatibleMetadata gcCountMeta() {
         return new HelidonMetadata("gc.total",
                             "Garbage Collection Count",
                             "Displays the total number of collections that have occurred. This attribute lists "
@@ -253,7 +253,7 @@ final class BaseRegistry extends Registry {
                             MetricUnits.NONE);
     }
 
-    private static void register(BaseRegistry registry, Metadata meta, Metric metric, Tag... tags) {
+    private static void register(BaseRegistry registry, CompatibleMetadata meta, Metric metric, Tag... tags) {
         if (registry.config.get(CONFIG_METRIC_ENABLED_BASE + meta.getName() + ".enabled").asBoolean().orElse(true)) {
             registry.register(meta, metric, tags);
         }

@@ -16,12 +16,12 @@
 
 package io.helidon.microprofile.metrics;
 
+import io.helidon.common.metrics.InternalMetricRegistryBridge;
 import javax.enterprise.inject.se.SeContainer;
 import javax.enterprise.inject.se.SeContainerInitializer;
 import javax.enterprise.inject.spi.CDI;
 
 import org.eclipse.microprofile.metrics.Metric;
-import org.eclipse.microprofile.metrics.MetricRegistry;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 
@@ -38,7 +38,7 @@ public class MetricsBaseTest {
 
     private static SeContainer cdiContainer;
 
-    private static MetricRegistry metricRegistry;
+    private static InternalMetricRegistryBridge metricRegistry;
 
     @BeforeAll
     public synchronized static void startCdiContainer() {
@@ -54,9 +54,9 @@ public class MetricsBaseTest {
         }
     }
 
-    static synchronized MetricRegistry getMetricRegistry() {
+    static synchronized InternalMetricRegistryBridge getMetricRegistry() {
         if (metricRegistry == null) {
-            metricRegistry = CDI.current().select(MetricRegistry.class).get();
+            metricRegistry = CDI.current().select(InternalMetricRegistryBridge.class).get();
         }
         return metricRegistry;
     }
