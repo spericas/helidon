@@ -36,5 +36,6 @@
     <modules>
         <module>config-cdi</module>
         <module>config</module>
+        <module>config-mockup</module>
     </modules>
 </project>
