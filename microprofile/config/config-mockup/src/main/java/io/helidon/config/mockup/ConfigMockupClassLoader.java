@@ -40,6 +40,16 @@ public class ConfigMockupClassLoader extends ClassLoader {
      * Constructor using default packages.
      */
     public ConfigMockupClassLoader() {
+        this(ClassLoader.getSystemClassLoader());
+    }
+
+    /**
+     * Construction from parent.
+     *
+     * @param parent A parent CL.
+     */
+    public ConfigMockupClassLoader(ClassLoader parent) {
+        super(parent);
         this.sourcePackage = DEFAULT_SOURCE_PACKAGE;
         this.targetPackage = DEFAULT_TARGET_PACKAGE;
         this.sourcePackagePath = DEFAULT_SOURCE_PACKAGE.replace('.', '/');
