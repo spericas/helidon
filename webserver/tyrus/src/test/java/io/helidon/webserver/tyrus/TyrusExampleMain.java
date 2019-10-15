@@ -61,24 +61,7 @@ public final class TyrusExampleMain {
         webServer = WebServer.create(builder.build(),
                                      Routing.builder()
                                             .register("/tyrus",
-                                                      TyrusSupport.builder()
-                                                                   .register(EchoEndpoint.class))
-                                            .any("/Tyrus/second", (req, res) -> {
-                                                req.content()
-                                                   .as(String.class)
-                                                   .thenAccept(s -> {
-                                                       res.send("second-content: " + s)
-                                                          .exceptionally(throwable -> {
-                                                              throwable.printStackTrace();
-                                                              fail("Should not fail: " + throwable.getMessage());
-                                                              return null;
-                                                          });
-                                                   })
-                                                   .exceptionally(throwable -> {
-                                                       req.next(throwable);
-                                                       return null;
-                                                   });
-                                            }));
+                                                      TyrusSupport.builder().register(EchoEndpoint.class).build()));
 
         webServer.start().toCompletableFuture().get(10, TimeUnit.SECONDS);
 
