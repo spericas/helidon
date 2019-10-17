@@ -12,7 +12,7 @@
     <artifactId>helidon-webserver-tyrus</artifactId>
 
     <properties>  <!-- TODO -->
-        <websocket-api-version>1.1</websocket-api-version>
+        <websocket-api-version>1.1.1</websocket-api-version>
         <tyrus-version>1.15</tyrus-version>
     </properties>
 
@@ -30,17 +30,8 @@
             <artifactId>helidon-common-reactive</artifactId>
         </dependency>
         <dependency>
-            <groupId>io.opentracing</groupId>
-            <artifactId>opentracing-api</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>javax.websocket</groupId>
-            <artifactId>javax.websocket-api</artifactId>
-            <version>${websocket-api-version}</version>
-        </dependency>
-        <dependency>
-            <groupId>javax.websocket</groupId>
-            <artifactId>javax.websocket-client-api</artifactId>
+            <groupId>jakarta.websocket</groupId>
+            <artifactId>jakarta.websocket-api</artifactId>
             <version>${websocket-api-version}</version>
         </dependency>
         <dependency>

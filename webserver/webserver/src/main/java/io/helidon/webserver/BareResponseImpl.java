@@ -144,16 +144,19 @@ class BareResponseImpl implements BareResponse {
                 .forEach(header -> response.headers().add(header, requestHeaders.get(header)));
 
         // Set chunked if length not set, may switch to length later
-        boolean lengthSet = HttpUtil.isContentLengthSet(response);
-        if (!lengthSet) {
-            lengthOptimization = status.code() == Http.Status.OK_200.code()
-                    && !HttpUtil.isTransferEncodingChunked(response);
-            HttpUtil.setTransferEncodingChunked(response, true);
+        if (!isWebSocketUpgrade(status, headers)) {
+            boolean lengthSet = HttpUtil.isContentLengthSet(response);
+            if (!lengthSet) {
+                lengthOptimization = status.code() == Http.Status.OK_200.code()
+                        && !HttpUtil.isTransferEncodingChunked(response);
+                HttpUtil.setTransferEncodingChunked(response, true);
+            }
         }
 
         // Add keep alive header as per:
         // http://www.w3.org/Protocols/HTTP/1.1/draft-ietf-http-v11-spec-01.html#Connection
-        if (keepAlive) {
+        // If already set (e.g. WebSocket upgrade), do not override
+        if (keepAlive && !headers.containsKey(HttpHeaderNames.CONNECTION.toString())) {
             response.headers().set(HttpHeaderNames.CONNECTION, HttpHeaderValues.KEEP_ALIVE);
         }
 
@@ -162,6 +165,11 @@ class BareResponseImpl implements BareResponse {
             LOGGER.finest(() -> log("Writing headers: " + status));
             initWriteResponse();
         }
+    }
+
+    private boolean isWebSocketUpgrade(Http.ResponseStatus status, Map<String, List<String>> headers) {
+        return status.code() == 101 && headers.containsKey("Upgrade")
+                && headers.get("Upgrade").contains("websocket");
     }
 
     /**

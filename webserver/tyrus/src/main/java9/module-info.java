@@ -20,7 +20,6 @@
 module io.helidon.webserver.tyrus {
     requires transitive java.annotation;
     requires transitive io.helidon.webserver;
-    // requires transitive java.ws.rs;
     requires transitive opentracing.api;
 
     requires io.helidon.common.context;
