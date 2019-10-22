@@ -78,6 +78,7 @@ class BareResponseImpl implements BareResponse {
     private volatile DataChunk firstChunk;
     private volatile DefaultHttpResponse response;
     private volatile boolean lengthOptimization;
+    private volatile Boolean isWebSocketUpgrade;
 
     /**
      * @param ctx the channel handler context
@@ -143,8 +144,12 @@ class BareResponseImpl implements BareResponse {
                 .filter(header -> header.startsWith(HTTP_2_HEADER_PREFIX))
                 .forEach(header -> response.headers().add(header, requestHeaders.get(header)));
 
-        // Set chunked if length not set, may switch to length later
-        if (!isWebSocketUpgrade(status, headers)) {
+        // Check if WebSocket upgrade
+        boolean isUpgrade = isWebSocketUpgrade(status, headers);
+        if (isUpgrade) {
+            isWebSocketUpgrade = true;
+        } else {
+            // Set chunked if length not set, may switch to length later
             boolean lengthSet = HttpUtil.isContentLengthSet(response);
             if (!lengthSet) {
                 lengthOptimization = status.code() == Http.Status.OK_200.code()
@@ -170,6 +175,19 @@ class BareResponseImpl implements BareResponse {
     private boolean isWebSocketUpgrade(Http.ResponseStatus status, Map<String, List<String>> headers) {
         return status.code() == 101 && headers.containsKey("Upgrade")
                 && headers.get("Upgrade").contains("websocket");
+    }
+
+    /**
+     * Determines if response is a WebSockets upgrade.
+     *
+     * @return Outcome of test.
+     * @throws IllegalStateException If headers not written yet.
+     */
+    boolean isWebSocketUpgrade() {
+        if (isWebSocketUpgrade == null) {
+            throw new IllegalStateException("Status and response headers not written");
+        }
+        return isWebSocketUpgrade;
     }
 
     /**

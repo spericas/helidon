@@ -34,6 +34,7 @@ public class TyrusReaderSubscriber implements Flow.Subscriber<DataChunk> {
 
     @Override
     public void onSubscribe(Flow.Subscription subscription) {
+        subscription.request(Long.MAX_VALUE);
     }
 
     @Override

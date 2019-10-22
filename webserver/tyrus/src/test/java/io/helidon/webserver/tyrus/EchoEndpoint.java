@@ -34,7 +34,6 @@ public class EchoEndpoint {
     @OnMessage
     public void echo(Session session, String message) throws IOException {
         session.getBasicRemote().sendText(message + " (from your server)");
-        session.close();
     }
 
     @OnError

@@ -68,7 +68,9 @@ public class TyrusWriterPublisher extends Writer implements Flow.Publisher<DataC
             requested.decrementAndGet();
             subscriber.onNext(DataChunk.create(true, byteBuffer));
             // TODO: completion handler
-            completionHandler.completed(byteBuffer);
+            if (completionHandler != null) {
+                completionHandler.completed(byteBuffer);
+            }
         } else {
             queue.add(new QueuedBuffer(byteBuffer, completionHandler));
         }
