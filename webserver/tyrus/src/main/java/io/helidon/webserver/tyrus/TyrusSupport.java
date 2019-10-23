@@ -19,6 +19,7 @@ package io.helidon.webserver.tyrus;
 import java.net.URI;
 import java.nio.ByteBuffer;
 import java.util.HashSet;
+import java.util.Optional;
 import java.util.Set;
 import java.util.logging.Logger;
 
@@ -36,16 +37,20 @@ import org.glassfish.tyrus.core.RequestContext;
 import org.glassfish.tyrus.core.TyrusUpgradeResponse;
 import org.glassfish.tyrus.core.TyrusWebSocketEngine;
 import org.glassfish.tyrus.server.TyrusServerContainer;
-import org.glassfish.tyrus.spi.CompletionHandler;
 import org.glassfish.tyrus.spi.Connection;
 import org.glassfish.tyrus.spi.WebSocketEngine;
 
+import static io.helidon.webserver.tyrus.NoOpCompletionHandler.NO_OP_COMPLETION_HANDLER;
+
 /**
- * Class TyrusSupport.
+ * Class TyrusSupport implemented as a Helidon service.
  */
 public class TyrusSupport implements Service {
     private static final Logger LOGGER = Logger.getLogger(TyrusSupport.class.getName());
 
+    /**
+     * A zero-length buffer indicates a connection flush to Helidon.
+     */
     private static final ByteBuffer FLUSH_BUFFER = ByteBuffer.allocateDirect(0);
 
     private final WebSocketEngine engine;
@@ -55,11 +60,23 @@ public class TyrusSupport implements Service {
         this.engine = engine;
     }
 
+    /**
+     * Register our WebSocket handler for all routes. Once a request is received,
+     * it will be forwarded to the next handler if not a protocol upgrade request.
+     *
+     * @param routingRules Routing rules to update.
+     */
     @Override
     public void update(Routing.Rules routingRules) {
+        LOGGER.info("Updating TyrusSupport routing routes");
         routingRules.any(handler);
     }
 
+    /**
+     * Creates a builder for this class.
+     *
+     * @return A builder for this class.
+     */
     public static Builder builder() {
         return new Builder();
     }
@@ -117,57 +134,65 @@ public class TyrusSupport implements Service {
         }
     }
 
+    /**
+     * A Helidon handler that integrates with Tyrus and can process WebSocket
+     * upgrade requests.
+     */
     private class TyrusHandler implements Handler {
 
+        /**
+         * Process a server request/response.
+         *
+         * @param req an HTTP server request.
+         * @param res an HTTP server response.
+         */
         @Override
         public void accept(ServerRequest req, ServerResponse res) {
-            req.headers().value(HandshakeRequest.SEC_WEBSOCKET_KEY).ifPresent(key -> {
-                LOGGER.fine("Initiating WebSocket handshake ...");
+            // Skip this handler if not an upgrade request
+            Optional<String> secWebSocketKey = req.headers().value(HandshakeRequest.SEC_WEBSOCKET_KEY);
+            if (!secWebSocketKey.isPresent()) {
+                req.next();
+                return;
+            }
 
+            LOGGER.fine("Initiating WebSocket handshake ...");
 
-
-                // Create request context and copy headers
-                RequestContext requestContext = RequestContext.Builder.create()
-                        .requestURI(URI.create(req.path().toString()))
-                        .build();
-                req.headers().toMap().entrySet().forEach(e -> {
-                    requestContext.getHeaders().put(e.getKey(), e.getValue());
-                });
-
-                final TyrusUpgradeResponse upgradeResponse = new TyrusUpgradeResponse();
-                final WebSocketEngine.UpgradeInfo upgradeInfo = engine.upgrade(requestContext, upgradeResponse);
-                switch (upgradeInfo.getStatus()) {
-                    case HANDSHAKE_FAILED:
-                        LOGGER.fine("WebSocket handshake failed");
-                        break;
-                    case NOT_APPLICABLE:
-                        LOGGER.fine("WebSocket handshake not applicable");
-                        break;
-                    case SUCCESS:
-                        LOGGER.fine("WebSocket handshake successful");
-
-                        // Respond to upgrade request
-                        res.status(upgradeResponse.getStatus());
-                        upgradeResponse.getHeaders().entrySet().forEach(e ->
-                                res.headers().add(e.getKey(), e.getValue()));
-                        TyrusWriterPublisher writer = new TyrusWriterPublisher();
-                        res.send(writer);
-                        writer.write(FLUSH_BUFFER, null);
-
-                        // Setup the WebSocket connection
-                        Connection connection = upgradeInfo.createConnection(writer, (closeReason) -> {
-                            // TODO - close connection
-                        });
-
-                        // Set up reader to pass data back to Tyrus
-                        TyrusReaderSubscriber reader = new TyrusReaderSubscriber();
-                        reader.readHandler(connection.getReadHandler());
-                        req.content().subscribe(reader);
-                        break;
-                    default:
-                        throw new IllegalStateException("Unexpected value: " + upgradeInfo.getStatus());
-                }
+            // Create Tyrus request context and copy request headers
+            RequestContext requestContext = RequestContext.Builder.create()
+                    .requestURI(URI.create(req.path().toString()))
+                    .build();
+            req.headers().toMap().entrySet().forEach(e -> {
+                requestContext.getHeaders().put(e.getKey(), e.getValue());
             });
+
+            // Use Tyrus to process a WebSocket upgrade request
+            final TyrusUpgradeResponse upgradeResponse = new TyrusUpgradeResponse();
+            final WebSocketEngine.UpgradeInfo upgradeInfo = engine.upgrade(requestContext, upgradeResponse);
+
+            // Respond to upgrade request using response from Tyrus
+            res.status(upgradeResponse.getStatus());
+            upgradeResponse.getHeaders().entrySet().forEach(e ->
+                    res.headers().add(e.getKey(), e.getValue()));
+            TyrusWriterPublisher writer = new TyrusWriterPublisher();
+            res.send(writer);
+
+            // Write reason for failure if not successful
+            if (upgradeInfo.getStatus() != WebSocketEngine.UpgradeStatus.SUCCESS) {
+                writer.write(ByteBuffer.wrap(upgradeResponse.getReasonPhrase().getBytes()),
+                        NO_OP_COMPLETION_HANDLER);
+            }
+
+            // Flush upgrade response
+            writer.write(FLUSH_BUFFER, NO_OP_COMPLETION_HANDLER);
+
+            // Setup the WebSocket connection
+            Connection connection = upgradeInfo.createConnection(writer,
+                    closeReason -> LOGGER.fine(() -> "Connection closed: " + closeReason));
+
+            // Set up reader to pass data back to Tyrus
+            TyrusReaderSubscriber reader = new TyrusReaderSubscriber();
+            reader.readHandler(connection.getReadHandler());
+            req.content().subscribe(reader);
         }
     }
 }
