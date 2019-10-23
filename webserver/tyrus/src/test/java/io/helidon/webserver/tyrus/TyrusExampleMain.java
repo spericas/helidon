@@ -26,8 +26,6 @@ import io.helidon.webserver.ServerConfiguration;
 import io.helidon.webserver.WebServer;
 import io.helidon.webserver.testsupport.LoggingTestUtils;
 
-import static org.junit.jupiter.api.Assertions.fail;
-
 /**
  * The TyrusExampleMain.
  */
@@ -58,10 +56,11 @@ public final class TyrusExampleMain {
             builder.port(8080);
         }
 
-        webServer = WebServer.create(builder.build(),
-                                     Routing.builder()
-                                            .register("/tyrus",
-                                                      TyrusSupport.builder().register(EchoEndpoint.class).build()));
+        webServer = WebServer.create(
+                builder.build(),
+                Routing.builder().register(
+                        "/tyrus",
+                        TyrusSupport.builder().register(EchoEndpoint.class).build()));
 
         webServer.start().toCompletableFuture().get(10, TimeUnit.SECONDS);
 

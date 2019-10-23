@@ -16,28 +16,42 @@
 
 package io.helidon.webserver.tyrus;
 
+import javax.websocket.OnClose;
 import javax.websocket.OnError;
 import javax.websocket.OnMessage;
 import javax.websocket.OnOpen;
 import javax.websocket.Session;
 import javax.websocket.server.ServerEndpoint;
 import java.io.IOException;
+import java.util.logging.Logger;
 
-@ServerEndpoint("/echo")
+@ServerEndpoint(
+        value = "/echo",
+        encoders = { UppercaseCodec.class },
+        decoders = { UppercaseCodec.class },
+        configurator = ServerConfigurator.class
+)
 public class EchoEndpoint {
+    private static final Logger LOGGER = Logger.getLogger(EchoEndpoint.class.getName());
 
     @OnOpen
     public void onOpen(Session session) throws IOException {
-        session.getBasicRemote().sendText("onOpen");
+        LOGGER.info("OnOpen called");
     }
 
     @OnMessage
     public void echo(Session session, String message) throws IOException {
-        session.getBasicRemote().sendText(message + " (from your server)");
+        LOGGER.info("OnMessage called with '" + message + "'");
+        session.getBasicRemote().sendText(message);
     }
 
     @OnError
     public void onError(Throwable t) {
-        t.printStackTrace();
+        LOGGER.info("OnError called");
+    }
+
+    @OnClose
+    public void onClose() {
+        LOGGER.info("OnClose called");
     }
 }
