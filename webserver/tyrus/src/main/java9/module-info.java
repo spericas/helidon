@@ -25,7 +25,12 @@ module io.helidon.webserver.tyrus {
     requires io.helidon.common.context;
     requires io.helidon.common.mapper;
     requires io.helidon.common.reactive;
+
     requires java.logging;
+    requires javax.websocket;
+    requires org.glassfish.tyrus.core;
+    requires org.glassfish.tyrus.server;
+    requires org.glassfish.tyrus.spi;
 
     exports io.helidon.webserver.tyrus;
 }

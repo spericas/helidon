@@ -18,9 +18,9 @@ package io.helidon.webserver.tyrus;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.util.LinkedList;
 import java.util.Queue;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicLong;
 
 import io.helidon.common.http.DataChunk;
@@ -36,16 +36,16 @@ public class TyrusWriterPublisher extends Writer implements Flow.Publisher<DataC
 
     private Flow.Subscriber<? super DataChunk> subscriber;
 
-    private final Queue<QueuedBuffer> queue = new LinkedList<>();
+    private final Queue<QueuedBuffer> queue = new ConcurrentLinkedQueue<>();
 
     private final AtomicLong requested = new AtomicLong(0L);
 
     private static class QueuedBuffer {
         private final CompletionHandler<ByteBuffer> completionHandler;
-        private final ByteBuffer dataFrame;
+        private final ByteBuffer byteBuffer;
 
-        QueuedBuffer(ByteBuffer dataFrame, CompletionHandler<ByteBuffer> completionHandler) {
-            this.dataFrame = dataFrame;
+        QueuedBuffer(ByteBuffer byteBuffer, CompletionHandler<ByteBuffer> completionHandler) {
+            this.byteBuffer = byteBuffer;
             this.completionHandler = completionHandler;
         }
 
@@ -53,8 +53,8 @@ public class TyrusWriterPublisher extends Writer implements Flow.Publisher<DataC
             return completionHandler;
         }
 
-        ByteBuffer dataFrame() {
-            return dataFrame;
+        ByteBuffer byteBuffer() {
+            return byteBuffer;
         }
     }
 
@@ -62,18 +62,28 @@ public class TyrusWriterPublisher extends Writer implements Flow.Publisher<DataC
 
     @Override
     public void write(ByteBuffer byteBuffer, CompletionHandler<ByteBuffer> handler) {
+        // No queueing if there is no subscriber
         if (subscriber == null) {
             return;
         }
+
+        // Nothing requested yet, just queue buffer
+        if (requested.get() <= 0) {
+            queue.add(new QueuedBuffer(byteBuffer, handler));
+            return;
+        }
+
+        // Write queued buffers first
+        while (!queue.isEmpty() && requested.get() > 0) {
+            QueuedBuffer queuedBuffer = queue.remove();
+            writeNext(queuedBuffer.byteBuffer(), queuedBuffer.completionHandler());
+            decrement(requested);
+        }
+
+        // Process current buffer
         if (requested.get() > 0) {
-            if (requested.get() != Long.MAX_VALUE) {
-                requested.decrementAndGet();
-            }
-            DataChunk dataChunk = DataChunk.create(true, byteBuffer, true);
-            if (handler != null) {
-                dataChunk.writeFuture(fromCompletionHandler(handler));
-            }
-            subscriber.onNext(dataChunk);
+            writeNext(byteBuffer, handler);
+            decrement(requested);
         } else {
             queue.add(new QueuedBuffer(byteBuffer, handler));
         }
@@ -112,6 +122,19 @@ public class TyrusWriterPublisher extends Writer implements Flow.Publisher<DataC
     }
 
     // -- Utility methods -----------------------------------------------------
+
+    private static synchronized long decrement(AtomicLong requested) {
+        long value = requested.get();
+        return value == Long.MAX_VALUE ? requested.get() : requested.decrementAndGet();
+    }
+
+    private void writeNext(ByteBuffer byteBuffer, CompletionHandler<ByteBuffer> handler) {
+        DataChunk dataChunk = DataChunk.create(true, byteBuffer, true);
+        if (handler != null) {
+            dataChunk.writeFuture(fromCompletionHandler(handler));
+        }
+        subscriber.onNext(dataChunk);
+    }
 
     /**
      * Wraps {@code CompletionHandler} into a {@code CompletableFuture} so that
