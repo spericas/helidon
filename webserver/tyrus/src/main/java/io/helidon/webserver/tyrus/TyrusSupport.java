@@ -40,8 +40,6 @@ import org.glassfish.tyrus.server.TyrusServerContainer;
 import org.glassfish.tyrus.spi.Connection;
 import org.glassfish.tyrus.spi.WebSocketEngine;
 
-import static io.helidon.webserver.tyrus.NoOpCompletionHandler.NO_OP_COMPLETION_HANDLER;
-
 /**
  * Class TyrusSupport implemented as a Helidon service.
  */
@@ -98,19 +96,19 @@ public class TyrusSupport implements Service {
 
         @Override
         public TyrusSupport build() {
-            // Create container and engine
+            // Create container and WebSocket engine
             TyrusServerContainer serverContainer = new TyrusServerContainer(endpointClasses) {
                 private final WebSocketEngine engine =
                         TyrusWebSocketEngine.builder(this).build();
 
                 @Override
-                public void register(Class<?> endpointClass) throws DeploymentException {
-                    engine.register(endpointClass, "/");        // TODO
+                public void register(Class<?> endpointClass) {
+                    throw new UnsupportedOperationException("Use TyrusWebSocketEngine for registration");
                 }
 
                 @Override
-                public void register(ServerEndpointConfig serverEndpointConfig) throws DeploymentException {
-                    engine.register(serverEndpointConfig, "/");     // TODO
+                public void register(ServerEndpointConfig serverEndpointConfig) {
+                    throw new UnsupportedOperationException("Use TyrusWebSocketEngine for registration");
                 }
 
                 @Override
@@ -119,17 +117,18 @@ public class TyrusSupport implements Service {
                 }
             };
 
-            // Register classes with engine
+            // Register classes with context path "/"
             WebSocketEngine engine = serverContainer.getWebSocketEngine();
             endpointClasses.forEach(c -> {
                 try {
+                    // Context path handled by Helidon based on app's routes
                     engine.register(c, "/");
                 } catch (DeploymentException e) {
                     throw new RuntimeException(e);
                 }
             });
 
-            // Create TyrusSupport using WebSockets engine
+            // Create TyrusSupport using WebSocket engine
             return new TyrusSupport(serverContainer.getWebSocketEngine());
         }
     }
@@ -159,11 +158,10 @@ public class TyrusSupport implements Service {
 
             // Create Tyrus request context and copy request headers
             RequestContext requestContext = RequestContext.Builder.create()
-                    .requestURI(URI.create(req.path().toString()))
+                    .requestURI(URI.create(req.path().toString()))      // excludes context path
                     .build();
-            req.headers().toMap().entrySet().forEach(e -> {
-                requestContext.getHeaders().put(e.getKey(), e.getValue());
-            });
+            req.headers().toMap().entrySet().forEach(e ->
+                    requestContext.getHeaders().put(e.getKey(), e.getValue()));
 
             // Use Tyrus to process a WebSocket upgrade request
             final TyrusUpgradeResponse upgradeResponse = new TyrusUpgradeResponse();
@@ -173,26 +171,24 @@ public class TyrusSupport implements Service {
             res.status(upgradeResponse.getStatus());
             upgradeResponse.getHeaders().entrySet().forEach(e ->
                     res.headers().add(e.getKey(), e.getValue()));
-            TyrusWriterPublisher writer = new TyrusWriterPublisher();
-            res.send(writer);
+            TyrusWriterPublisher publisherWriter = new TyrusWriterPublisher();
+            res.send(publisherWriter);
 
             // Write reason for failure if not successful
             if (upgradeInfo.getStatus() != WebSocketEngine.UpgradeStatus.SUCCESS) {
-                writer.write(ByteBuffer.wrap(upgradeResponse.getReasonPhrase().getBytes()),
-                        NO_OP_COMPLETION_HANDLER);
+                publisherWriter.write(ByteBuffer.wrap(upgradeResponse.getReasonPhrase().getBytes()), null);
             }
 
             // Flush upgrade response
-            writer.write(FLUSH_BUFFER, NO_OP_COMPLETION_HANDLER);
+            publisherWriter.write(FLUSH_BUFFER, null);
 
-            // Setup the WebSocket connection
-            Connection connection = upgradeInfo.createConnection(writer,
+            // Setup the WebSocket connection and internally the ReaderHandler
+            Connection connection = upgradeInfo.createConnection(publisherWriter,
                     closeReason -> LOGGER.fine(() -> "Connection closed: " + closeReason));
 
             // Set up reader to pass data back to Tyrus
-            TyrusReaderSubscriber reader = new TyrusReaderSubscriber();
-            reader.readHandler(connection.getReadHandler());
-            req.content().subscribe(reader);
+            TyrusReaderSubscriber subscriber = new TyrusReaderSubscriber(connection);
+            req.content().subscribe(subscriber);
         }
     }
 }

@@ -16,20 +16,33 @@
 
 package io.helidon.webserver.tyrus;
 
+import javax.websocket.CloseReason;
+import java.nio.ByteBuffer;
+import java.util.logging.Logger;
+
 import io.helidon.common.http.DataChunk;
 import io.helidon.common.reactive.Flow;
+import org.glassfish.tyrus.spi.Connection;
 
-import org.glassfish.tyrus.spi.ReadHandler;
+import static javax.websocket.CloseReason.CloseCodes.NORMAL_CLOSURE;
+import static javax.websocket.CloseReason.CloseCodes.UNEXPECTED_CONDITION;
 
 /**
  * Class TyrusReaderSubscriber.
  */
 public class TyrusReaderSubscriber implements Flow.Subscriber<DataChunk> {
+    private static final Logger LOGGER = Logger.getLogger(TyrusSupport.class.getName());
 
-    private ReadHandler handler;
+    private static final int MAX_RETRIES = 3;
+    private static final CloseReason CONNECTION_CLOSED = new CloseReason(NORMAL_CLOSURE, "Connection closed");
 
-    void readHandler(ReadHandler handler) {
-        this.handler = handler;
+    private final Connection connection;
+
+    TyrusReaderSubscriber(Connection connection) {
+        if (connection == null) {
+            throw new IllegalArgumentException("Connection cannot be null");
+        }
+        this.connection = connection;
     }
 
     @Override
@@ -39,16 +52,30 @@ public class TyrusReaderSubscriber implements Flow.Subscriber<DataChunk> {
 
     @Override
     public void onNext(DataChunk item) {
-        if (handler != null) {
-            handler.handle(item.data());
+        // Send data to Tyrus
+        ByteBuffer data = item.data();
+        connection.getReadHandler().handle(data);
+
+        // Retry a few times if Tyrus did not consume all data
+        int retries = MAX_RETRIES;
+        while (data.remaining() > 0 && retries-- > 0) {
+            LOGGER.warning("Tyrus did not consume all data buffer");
+            connection.getReadHandler().handle(data);
+        }
+
+        // Report error if data is still unconsumed
+        if (retries == 0) {
+            throw new RuntimeException("Tyrus unable to consume data buffer");
         }
     }
 
     @Override
     public void onError(Throwable throwable) {
+        connection.close(new CloseReason(UNEXPECTED_CONDITION, throwable.getMessage()));
     }
 
     @Override
     public void onComplete() {
+        connection.close(CONNECTION_CLOSED);
     }
 }

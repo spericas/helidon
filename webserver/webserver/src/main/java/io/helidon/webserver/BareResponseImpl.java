@@ -344,6 +344,14 @@ class BareResponseImpl implements BareResponse {
 
             return channelFuture
                     .addListener(future -> {
+                        data.writeFuture().ifPresent(writeFuture -> {
+                            // Complete write future based con channel future
+                            if (future.isSuccess()) {
+                                writeFuture.complete(data);
+                            } else {
+                                writeFuture.completeExceptionally(future.cause());
+                            }
+                        });
                         data.release();
                         LOGGER.finest(() -> log("Data chunk sent with result: " + future.isSuccess()));
                     })

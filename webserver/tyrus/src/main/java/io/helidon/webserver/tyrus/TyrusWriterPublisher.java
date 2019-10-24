@@ -20,6 +20,7 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.LinkedList;
 import java.util.Queue;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicLong;
 
 import io.helidon.common.http.DataChunk;
@@ -60,19 +61,21 @@ public class TyrusWriterPublisher extends Writer implements Flow.Publisher<DataC
     // -- Writer --------------------------------------------------------------
 
     @Override
-    public void write(ByteBuffer byteBuffer, CompletionHandler<ByteBuffer> completionHandler) {
+    public void write(ByteBuffer byteBuffer, CompletionHandler<ByteBuffer> handler) {
         if (subscriber == null) {
             return;
         }
         if (requested.get() > 0) {
-            requested.decrementAndGet();
-            subscriber.onNext(DataChunk.create(true, byteBuffer));
-            // TODO: completion handler
-            if (completionHandler != null) {
-                completionHandler.completed(byteBuffer);
+            if (requested.get() != Long.MAX_VALUE) {
+                requested.decrementAndGet();
             }
+            DataChunk dataChunk = DataChunk.create(true, byteBuffer, true);
+            if (handler != null) {
+                dataChunk.writeFuture(fromCompletionHandler(handler));
+            }
+            subscriber.onNext(dataChunk);
         } else {
-            queue.add(new QueuedBuffer(byteBuffer, completionHandler));
+            queue.add(new QueuedBuffer(byteBuffer, handler));
         }
     }
 
@@ -106,5 +109,26 @@ public class TyrusWriterPublisher extends Writer implements Flow.Publisher<DataC
                 requested.set(0L);
             }
         });
+    }
+
+    // -- Utility methods -----------------------------------------------------
+
+    /**
+     * Wraps {@code CompletionHandler} into a {@code CompletableFuture} so that
+     * when the latter succeeds or fails so does the former.
+     *
+     * @param handler Handler to wrap.
+     * @return Wrapped handler.
+     */
+    private static CompletableFuture<DataChunk> fromCompletionHandler(CompletionHandler<ByteBuffer> handler) {
+        CompletableFuture<DataChunk> future = new CompletableFuture<>();
+        future.whenComplete((chunk, throwable) -> {
+            if (throwable == null) {
+                handler.completed(chunk.data());
+            } else {
+                handler.failed(throwable);
+            }
+        });
+        return future;
     }
 }

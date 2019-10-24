@@ -51,7 +51,7 @@ public class EchoEndpoint {
     }
 
     @OnClose
-    public void onClose() {
+    public void onClose(Session session) {
         LOGGER.info("OnClose called");
     }
 }
