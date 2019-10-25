@@ -18,19 +18,18 @@
  * Tyrus integration.
  */
 module io.helidon.webserver.tyrus {
+    requires java.logging;
+    requires transitive jakarta.websocket.api;
     requires transitive java.annotation;
     requires transitive io.helidon.webserver;
-    requires transitive opentracing.api;
 
     requires io.helidon.common.context;
     requires io.helidon.common.mapper;
     requires io.helidon.common.reactive;
 
-    requires java.logging;
-    requires javax.websocket;
-    requires org.glassfish.tyrus.core;
-    requires org.glassfish.tyrus.server;
-    requires org.glassfish.tyrus.spi;
+    requires tyrus.core;
+    requires tyrus.server;
+    requires tyrus.spi;
 
     exports io.helidon.webserver.tyrus;
 }
