@@ -23,12 +23,16 @@ import javax.enterprise.inject.se.SeContainerInitializer;
 import javax.inject.Inject;
 import javax.transaction.Status;
 import javax.transaction.SystemException;
-import javax.transaction.TransactionManager;
-import javax.transaction.Transactional;
 import javax.transaction.Transaction;
 import javax.transaction.TransactionScoped;
+import javax.transaction.Transactional;
 import javax.transaction.UserTransaction;
+import java.util.ArrayDeque;
+import java.util.Arrays;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 
+import io.helidon.common.ThreadLocalRunnable;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -57,24 +61,25 @@ public class TestTransactionalAnnotationSupport {
     @BeforeEach
     void startCdiContainer() {
         final SeContainerInitializer initializer = SeContainerInitializer.newInstance()
-            .addBeanClasses(TestTransactionalAnnotationSupport.class);
+                .addBeanClasses(TestTransactionalAnnotationSupport.class);
         assertNotNull(initializer);
         this.cdiContainer = initializer.initialize();
     }
-  
+
     @AfterEach
     void shutDownCdiContainer() {
         if (this.cdiContainer != null) {
             this.cdiContainer.close();
         }
     }
-  
+
     private static void onStartup(@Observes @Initialized(ApplicationScoped.class) final Object event,
                                   final TestTransactionalAnnotationSupport self)
-        throws SystemException {
+            throws Exception {
         assertNotNull(event);
         assertNotNull(self);
-        self.doSomethingTransactional();
+  //      self.doSomethingTransactional();
+        self.doSomethingTransactionalNewThread();
     }
 
     private void onBeginningOfTransactionScope(@Observes @Initialized(TransactionScoped.class) final Object event) {
@@ -91,9 +96,40 @@ public class TestTransactionalAnnotationSupport {
         assertEquals(Status.STATUS_ACTIVE, this.transaction.getStatus());
     }
 
+    @Transactional(Transactional.TxType.REQUIRED)
+    void doSomethingTransactionalNewThread() throws Exception {
+        final Thread thread = Thread.currentThread();
+        Future<?> f = Executors.newSingleThreadExecutor().submit(
+                new ThreadLocalRunnable(() -> {
+                    try {
+                        assertTrue(this.transactionScopeStarted);
+                        assertNotNull(this.userTransaction);
+                        assertEquals(Status.STATUS_ACTIVE, this.userTransaction.getStatus());
+                        assertNotNull(this.transaction);
+                        assertEquals(Status.STATUS_ACTIVE, this.transaction.getStatus());
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                    }
+                }, thread, TestTransactionalAnnotationSupport::filterNarayana));
+        f.get();        // wait
+    }
+
+    /**
+     * Predicate that filters only Narayana thread locals.
+     *
+     * @param obj Queue.
+     * @return Outcome of filtering.
+     */
+    static boolean filterNarayana(Object obj) {
+        if (obj instanceof java.util.ArrayDeque<?>) {
+            ArrayDeque<?> deque = (ArrayDeque<?>) obj;
+            return Arrays.stream(deque.toArray()).filter(
+                    e -> e.getClass().getPackage().getName().startsWith("com.arjuna")).count() > 0;
+        }
+        return false;
+    }
+
     @Test
     void testTransactionalAnnotationSupport() {
-
     }
-  
 }
