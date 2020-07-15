@@ -69,8 +69,11 @@ import static io.helidon.microprofile.faulttolerance.FaultToleranceMetrics.getCo
 import static io.helidon.microprofile.faulttolerance.FaultToleranceMetrics.getHistogram;
 
 /**
- * Class CommandRetrier.
+ * Applies retry logic to a Hystrix command using Failsafe.
+ *
+ * @deprecated this class should not have been public
  */
+@Deprecated(since = "2.1.0")
 public class CommandRetrier {
     private static final Logger LOGGER = Logger.getLogger(CommandRetrier.class.getName());
 

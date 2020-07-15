@@ -34,8 +34,11 @@ import static io.helidon.microprofile.faulttolerance.FaultToleranceExtension.get
 import static io.helidon.microprofile.faulttolerance.FaultToleranceExtension.isFaultToleranceMetricsEnabled;
 
 /**
- * Class FaultToleranceMetrics.
+ * Implementation of fault tolerance metrics.
+ *
+ * @deprecated this class should not have been public
  */
+@Deprecated(since = "2.1.0")
 class FaultToleranceMetrics {
 
     static final String METRIC_NAME_TEMPLATE = "ft.%s.%s.%s";

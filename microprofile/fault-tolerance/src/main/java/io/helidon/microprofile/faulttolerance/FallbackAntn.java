@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2019 Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2020 Oracle and/or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,8 +26,12 @@ import org.eclipse.microprofile.faulttolerance.FallbackHandler;
 import org.eclipse.microprofile.faulttolerance.exceptions.FaultToleranceDefinitionException;
 
 /**
- * Class FallbackAntn.
+ * Implementation of {@link org.eclipse.microprofile.faulttolerance.Fallback} annotation.
+ * This is an implementation detail and should not be used outside of this module.
+ *
+ * @deprecated this class should not have been public
  */
+@Deprecated(since = "2.1.0")
 public class FallbackAntn extends MethodAntn implements Fallback {
 
     /**

@@ -25,8 +25,11 @@ import io.helidon.common.configurable.ScheduledThreadPoolSupplier;
 import net.jodah.failsafe.util.concurrent.Scheduler;
 
 /**
- * Class CommandScheduler.
+ * Scheduler for fault tolerance commands.
+ *
+ * @deprecated this class should not have been public
  */
+@Deprecated(since = "2.1.0")
 public class CommandScheduler implements Scheduler {
 
     private static final String THREAD_NAME_PREFIX = "helidon-ft-async-";

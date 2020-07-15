@@ -57,8 +57,11 @@ import static io.helidon.microprofile.faulttolerance.FaultToleranceMetrics.regis
 import static io.helidon.microprofile.faulttolerance.FaultToleranceMetrics.registerHistogram;
 
 /**
- * Class FaultToleranceCommand.
+ * Represents a fault tolerance command running with Hystrix.
+ *
+ * @deprecated this class should not have been public
  */
+@Deprecated(since = "2.1.0")
 public class FaultToleranceCommand extends HystrixCommand<Object> {
     private static final Logger LOGGER = Logger.getLogger(FaultToleranceCommand.class.getName());
 
