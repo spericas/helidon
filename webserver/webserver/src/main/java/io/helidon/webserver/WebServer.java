@@ -751,12 +751,7 @@ public interface WebServer {
             return this;
         }
 
-        /**
-         * Configure whether to enable content negotiation for compression.
-         *
-         * @param value compression flag
-         * @return updated builder instance
-         */
+        @Override
         public Builder enableCompression(boolean value) {
             configurationBuilder.enableCompression(value);
             return this;
