@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020 Oracle and/or its affiliates.
+ * Copyright (c) 2020 Oracle and/or its affiliates. All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,16 +15,22 @@
  */
 package io.helidon.tests.functional.mpcompression;
 
-import javax.ws.rs.GET;
-import javax.ws.rs.HeaderParam;
+import io.helidon.microprofile.server.Server;
 
-import javax.ws.rs.Path;
+public final class Main {
 
-@Path("/compressed")
-public class MpResource {
+    private static Server server;
 
-    @GET
-    public String getIt(@HeaderParam("accept-encoding") String acceptEncoding) {
-        return "Hello World: " + acceptEncoding;
+    private Main() {
+    }
+
+    public static void main(String[] args) {
+        server = Server.builder()
+                .build()
+                .start();
+    }
+
+    static Server server() {
+        return server;
     }
 }
