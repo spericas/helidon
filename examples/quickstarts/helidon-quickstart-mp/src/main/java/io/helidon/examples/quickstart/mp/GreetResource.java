@@ -17,6 +17,7 @@
 package io.helidon.examples.quickstart.mp;
 
 import java.util.Collections;
+import java.util.Objects;
 
 import javax.enterprise.context.RequestScoped;
 import javax.inject.Inject;
@@ -29,9 +30,11 @@ import javax.ws.rs.PUT;
 import javax.ws.rs.Path;
 import javax.ws.rs.PathParam;
 import javax.ws.rs.Produces;
+import javax.ws.rs.core.Context;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 
+import io.helidon.webserver.ServerResponse;
 import org.eclipse.microprofile.openapi.annotations.enums.SchemaType;
 import org.eclipse.microprofile.openapi.annotations.media.Content;
 import org.eclipse.microprofile.openapi.annotations.media.Schema;
@@ -59,6 +62,9 @@ public class GreetResource {
 
     private static final JsonBuilderFactory JSON = Json.createBuilderFactory(Collections.emptyMap());
 
+    @Context
+    private ServerResponse response;
+
     /**
      * The greeting message provider.
      */
@@ -73,6 +79,7 @@ public class GreetResource {
     @Inject
     public GreetResource(GreetingProvider greetingConfig) {
         this.greetingProvider = greetingConfig;
+
     }
 
     /**
@@ -83,7 +90,13 @@ public class GreetResource {
     @SuppressWarnings("checkstyle:designforextension")
     @GET
     @Produces(MediaType.APPLICATION_JSON)
-    public JsonObject getDefaultMessage() {
+    public JsonObject getDefaultMessage() throws InterruptedException {
+        Objects.requireNonNull(response);
+        response.whenSent().whenComplete((r, t) -> {
+            System.out.println("### r " + r);
+            System.out.println("### t " + t);
+        });
+        Thread.sleep(10000);
         return createResponse("World");
     }
 
