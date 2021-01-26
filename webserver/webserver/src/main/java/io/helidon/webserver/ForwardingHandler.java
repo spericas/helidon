@@ -16,11 +16,12 @@
 
 package io.helidon.webserver;
 
+import java.lang.ref.ReferenceQueue;
 import java.nio.charset.StandardCharsets;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Queue;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.logging.Logger;
 
@@ -50,6 +51,7 @@ import io.netty.handler.codec.http.websocketx.WebSocketServerProtocolHandler;
 import static io.helidon.webserver.HttpInitializer.CERTIFICATE_NAME;
 import static io.netty.handler.codec.http.HttpResponseStatus.BAD_REQUEST;
 import static io.netty.handler.codec.http.HttpResponseStatus.CONTINUE;
+import static io.netty.handler.codec.http.HttpResponseStatus.REQUEST_ENTITY_TOO_LARGE;
 import static io.netty.handler.codec.http.HttpVersion.HTTP_1_1;
 
 /**
@@ -66,19 +68,25 @@ public class ForwardingHandler extends SimpleChannelInboundHandler<Object> {
     private final Routing routing;
     private final NettyWebServer webServer;
     private final SSLEngine sslEngine;
-    private final Queue<ReferenceHoldingQueue<DataChunk>> queues;
+    private final ReferenceQueue queues;
     private final HttpRequestDecoder httpRequestDecoder;
+    private final long maxPayloadSize = 1024*1024*20;
 
     // this field is always accessed by the very same thread; as such, it doesn't need to be
     // concurrency aware
     private RequestContext requestContext;
 
     private boolean isWebSocketUpgrade = false;
+    private long actualPayloadSize;
+    private boolean ignorePayload;
+
+    private CompletableFuture prev;
+    private boolean lastContent;
 
     ForwardingHandler(Routing routing,
                       NettyWebServer webServer,
                       SSLEngine sslEngine,
-                      Queue<ReferenceHoldingQueue<DataChunk>> queues,
+                      ReferenceQueue queues,
                       HttpRequestDecoder httpRequestDecoder) {
         this.routing = routing;
         this.webServer = webServer;
@@ -94,6 +102,13 @@ public class ForwardingHandler extends SimpleChannelInboundHandler<Object> {
         if (requestContext == null) {
             // there was no publisher associated with this connection
             // this happens in case there was no http request made on this connection
+
+            // this also happens after LastHttpContent has been consumed by channelRead0
+            if (lastContent) {
+                // if the last thing that went through channelRead0 was LastHttpContent, then
+                // there is no request handler that should be enforcing backpressure
+                ctx.channel().config().setAutoRead(true);
+            }
             return;
         }
 
@@ -107,7 +122,8 @@ public class ForwardingHandler extends SimpleChannelInboundHandler<Object> {
         LOGGER.fine(() -> String.format("[Handler: %s] Received object: %s", System.identityHashCode(this), msg.getClass()));
 
         if (msg instanceof HttpRequest) {
-
+            lastContent = false;
+            // Turns off auto read
             ctx.channel().config().setAutoRead(false);
 
             HttpRequest request = (HttpRequest) msg;
@@ -121,10 +137,49 @@ public class ForwardingHandler extends SimpleChannelInboundHandler<Object> {
             Optional.ofNullable(ctx.channel().attr(CERTIFICATE_NAME).get())
                     .ifPresent(name -> request.headers().set(Http.Header.X_HELIDON_CN, name));
             ReferenceHoldingQueue<DataChunk> queue = new ReferenceHoldingQueue<>();
-            queues.add(queue);
-            requestContext = new RequestContext(new HttpRequestScopedPublisher(ctx, queue), request);
+            final RequestContext requestContext = new RequestContext(new HttpRequestScopedPublisher(ctx, queue), request);
+            this.requestContext = requestContext;
+
             // the only reason we have the 'ref' here is that the field might get assigned with null
             final HttpRequestScopedPublisher publisherRef = requestContext.publisher();
+
+            // we want to retain R, even if legitimate references to it are lost by T
+            // so we reference T phantomly, and if T is ready to be GCed, we return R to the pool
+            //
+            // ReleasableReference ...> T --*--> R
+            //    `-------------------------'
+            //
+            // At the moment the only R maintained this way is Netty's ByteBufs.
+            //
+            // We don't want to contend on enqueuing/dequeuing of references to ByteBufs, so we maintain a reference queue
+            // per request, then only if the reference queue still references ByteBufs that have not been released back
+            // to Netty, we let one reference queue handle those.
+            //
+            // Here we track the reference to ReferenceHoldingQueue, which normally is processed by the request/response,
+            // we want to make sure that even if the processing is broken in some way, and the normal processing
+            // routine is no longer reachable, we still are able to process the ReferenceHoldingQueues. We assume this to
+            // be the case, when publisherRef is lost - there is no other entity that may invoke queue.release() at some
+            // point.
+            //
+            // when publisherRef is lost, make sure non-empty queue is enqueued with queues
+            final ReferenceHoldingQueue.IndirectReference<ReferenceHoldingQueue> publisherPh = new ReferenceHoldingQueue.IndirectReference<>(publisherRef, queues, queue);
+
+            publisherRef.onRequest((n, demand) -> {
+                if (publisherRef.isUnbounded()) {
+                    LOGGER.finest("Netty autoread: true");
+                    ctx.channel().config().setAutoRead(true);
+                } else {
+                    LOGGER.finest("Netty autoread: false");
+                    ctx.channel().config().setAutoRead(false);
+                }
+
+                if (publisherRef.hasRequests()) {
+                    LOGGER.finest("Requesting next chunks from Netty.");
+                    ctx.channel().read();
+                } else {
+                    LOGGER.finest("No hook action required.");
+                }
+            });
             long requestId = REQUEST_ID_GENERATOR.incrementAndGet();
 
             // If a problem with the request URI, return 400 response
@@ -137,26 +192,54 @@ public class ForwardingHandler extends SimpleChannelInboundHandler<Object> {
                 return;
             }
 
+            // If context length is greater than maximum allowed, return 413 response
+            if (maxPayloadSize >= 0) {
+                String contentLength = request.headers().get(Http.Header.CONTENT_LENGTH);
+                if (contentLength != null) {
+                    try {
+                        long value = Long.parseLong(contentLength);
+                        if (value > maxPayloadSize) {
+                            LOGGER.fine(() -> String.format("[Handler: %s, Channel: %s] Payload length over max %d > %d",
+                                    System.identityHashCode(this), System.identityHashCode(ctx.channel()),
+                                    value, maxPayloadSize));
+                            ignorePayload = true;
+                            send413PayloadTooLarge(ctx);
+                            return;
+                        }
+                    } catch (NumberFormatException e) {
+                        send400BadRequest(ctx, Http.Header.CONTENT_LENGTH + " header is invalid");
+                        return;
+                    }
+                }
+            }
+
+            if (prev != null && prev.isDone()) {
+                prev = null;
+            }
+
+            // Create response and handler for its completion
             BareResponseImpl bareResponse =
-                    new BareResponseImpl(ctx, request, publisherRef::isCompleted, Thread.currentThread(), requestId);
+                    new BareResponseImpl(ctx, request, publisherRef::isCompleted, prev, Thread.currentThread(), requestId);
+            prev = new CompletableFuture();
+
+            final CompletableFuture thisResp = prev;
+
             bareResponse.whenCompleted()
                         .thenRun(() -> {
-                            RequestContext requestContext = this.requestContext;
                             if (requestContext != null) {
                                 requestContext.responseCompleted(true);
                             }
+
+                            publisherRef.clearBuffer(DataChunk::release);
 
                             // Cleanup for these queues is done in HttpInitializer, but
                             // we try to do it here if possible to reduce memory usage,
                             // especially for keep-alive connections
                             if (queue.release()) {
-                                queues.remove(queue);
+                                publisherPh.acquire();
                             }
-                            publisherRef.clearBuffer(DataChunk::release);
 
-                            // Enable auto-read only after response has been completed
-                            // to avoid a race condition with the next response
-                            ctx.channel().config().setAutoRead(true);
+                            thisResp.complete(null);
                         });
             if (HttpUtil.is100ContinueExpected(request)) {
                 send100Continue(ctx);
@@ -186,6 +269,7 @@ public class ForwardingHandler extends SimpleChannelInboundHandler<Object> {
                 throw new IllegalStateException("There is no request context associated with this http content. "
                                                 + "This is never expected to happen!");
             }
+            lastContent = false;
 
             HttpContent httpContent = (HttpContent) msg;
 
@@ -206,13 +290,25 @@ public class ForwardingHandler extends SimpleChannelInboundHandler<Object> {
                     // payload is not consumed and the response is already sent; we must close the connection
                     LOGGER.finer(() -> "Closing connection because request payload was not consumed; method: " + method);
                     ctx.close();
-                } else {
+                } else if (!ignorePayload) {
+                    // Check payload size if a maximum has been set
+                    actualPayloadSize += content.readableBytes();
+                    if (maxPayloadSize >= 0 && actualPayloadSize > maxPayloadSize) {
+                            LOGGER.fine(() -> String.format("[Handler: %s, Channel: %s] Chunked Payload over max %d > %d",
+                                    System.identityHashCode(this), System.identityHashCode(ctx.channel()),
+                                    actualPayloadSize, maxPayloadSize));
+                            ignorePayload = true;
+                            send413PayloadTooLarge(ctx);
+                            requestContext.publisher().fail(new IllegalStateException("Payload too large"));
+                            return;
+                    }
                     requestContext.publisher().emit(content);
                 }
             }
 
             if (msg instanceof LastHttpContent) {
                 if (!isWebSocketUpgrade) {
+                    lastContent = true;
                     requestContext.publisher().complete();
                     requestContext = null; // just to be sure that current http req/res session doesn't interfere with other ones
                 }
@@ -291,6 +387,20 @@ public class ForwardingHandler extends SimpleChannelInboundHandler<Object> {
                     ctx.close();
                 });
 
+    }
+
+    /**
+     * Returns a 413 (Payload Too Large) response.
+     *
+     * @param ctx Channel context.
+     */
+    private void send413PayloadTooLarge(ChannelHandlerContext ctx) {
+        FullHttpResponse response = new DefaultFullHttpResponse(HTTP_1_1, REQUEST_ENTITY_TOO_LARGE);
+        ctx.write(response)
+                .addListener(future -> {
+                    ctx.flush();
+                    ctx.close();
+                });
     }
 
     @Override

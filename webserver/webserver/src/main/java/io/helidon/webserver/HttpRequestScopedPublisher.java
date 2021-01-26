@@ -15,7 +15,6 @@
  */
 package io.helidon.webserver;
 
-import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.logging.Logger;
 
 import io.helidon.common.http.DataChunk;
@@ -33,34 +32,11 @@ class HttpRequestScopedPublisher extends BufferedEmittingPublisher<DataChunk> {
 
     private static final Logger LOGGER = Logger.getLogger(HttpRequestScopedPublisher.class.getName());
 
-    private final ReentrantReadWriteLock.WriteLock lock = new ReentrantReadWriteLock().writeLock();
     private final ReferenceHoldingQueue<DataChunk> referenceQueue;
 
     HttpRequestScopedPublisher(ChannelHandlerContext ctx, ReferenceHoldingQueue<DataChunk> referenceQueue) {
         super();
         this.referenceQueue = referenceQueue;
-        super.onRequest((n, demand) -> {
-            if (super.isUnbounded()) {
-                LOGGER.finest("Netty autoread: true");
-                ctx.channel().config().setAutoRead(true);
-            } else {
-                LOGGER.finest("Netty autoread: false");
-                ctx.channel().config().setAutoRead(false);
-            }
-
-            try {
-                lock.lock();
-
-                if (super.hasRequests()) {
-                    LOGGER.finest("Requesting next chunks from Netty.");
-                    ctx.channel().read();
-                } else {
-                    LOGGER.finest("No hook action required.");
-                }
-            } finally {
-                lock.unlock();
-            }
-        });
     }
 
     public int emit(ByteBuf data) {

@@ -16,21 +16,38 @@
 
 package io.helidon.common;
 
-import java.util.concurrent.locks.Lock;
-import java.util.concurrent.locks.ReentrantLock;
+import java.lang.invoke.MethodHandles;
+import java.lang.invoke.VarHandle;
+
+import java.util.concurrent.Semaphore;
 import java.util.function.Supplier;
 
 class LazyValueImpl<T> implements LazyValue<T> {
-    private final Lock theLock = new ReentrantLock();
+    private volatile Semaphore theLock;
+    private static final VarHandle THE_LOCK;
+    private static final VarHandle LOADED;
+
+    static {
+       try {
+          THE_LOCK = MethodHandles.lookup().findVarHandle(LazyValueImpl.class, "theLock", Semaphore.class);
+          LOADED = MethodHandles.lookup().findVarHandle(LazyValueImpl.class, "loaded", int.class);
+       } catch(Exception e) {
+          throw new Error("Expected this to succeed", e);
+       }
+    }
 
     private T value;
 
     private Supplier<T> delegate;
-    private volatile boolean loaded;
+    private volatile int loaded;
+
+    private final static int DONE = -1;
+    private final static int INIT = 0;
+    private final static int WORKING = INIT + 1;
 
     LazyValueImpl(T value) {
         this.value = value;
-        this.loaded = true;
+        this.loaded = DONE;
     }
 
     LazyValueImpl(Supplier<T> supplier) {
@@ -39,27 +56,54 @@ class LazyValueImpl<T> implements LazyValue<T> {
 
     @Override
     public boolean isLoaded() {
-        return loaded;
+        return loaded == DONE;
     }
 
     @Override
     public T get() {
-        if (loaded) {
+        int l = loaded;
+        if (l == DONE) {
             return value;
         }
 
-        // not loaded (probably)
-        theLock.lock();
+        Semaphore sema = theLock;
+        while(l != DONE && !LOADED.compareAndSet(this, INIT, WORKING)) {
+           // of those who lost the race to grab loaded in state INIT, one manages
+           // to set theLock
+           if (sema == null) {
+              THE_LOCK.compareAndSet(this, null, new Semaphore(0));
+              sema = theLock;
+           }
+
+           l = loaded;
+
+           if (l == WORKING) {
+               sema.acquireUninterruptibly();
+               l = loaded;
+           }
+        }
 
         try {
-            if (loaded) {
+            if (l == DONE) {
                 return value;
             }
+            l = INIT;
             value = delegate.get();
-            loaded = true;
             delegate = null;
+            l = DONE;
+            loaded = DONE;
         } finally {
-            theLock.unlock();
+            if (l == INIT) {
+               // must be leaving exceptionally - delegate.get() may throw
+               loaded = INIT;
+            }
+            // assert: if theLock is null, the successful CAS of theLock is in the future;
+            //         but after such CAS there will be a check of loaded, which will observe
+            //         that it is not WORKING, and not enter acquire()
+            sema = theLock;
+            if (sema != null) {
+                sema.release();
+            }
         }
 
         return value;

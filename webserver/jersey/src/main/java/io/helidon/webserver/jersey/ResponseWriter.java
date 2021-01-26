@@ -22,14 +22,17 @@ import java.nio.ByteBuffer;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.Flow;
+import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.logging.Logger;
 
 import javax.ws.rs.core.MediaType;
 
 import io.helidon.common.http.DataChunk;
 import io.helidon.common.http.Http;
-import io.helidon.common.reactive.MultiFromOutputStream;
 import io.helidon.webserver.ConnectionClosedException;
 import io.helidon.webserver.ServerRequest;
 import io.helidon.webserver.ServerResponse;
@@ -45,52 +48,7 @@ class ResponseWriter implements ContainerResponseWriter {
 
     private static final Logger LOGGER = Logger.getLogger(ResponseWriter.class.getName());
 
-    private final MultiFromOutputStream publisher = new MultiFromOutputStream() {
-        @Override
-        public void write(byte[] b) throws IOException {
-            try {
-                super.write(b);
-            } catch (ConnectionClosedException e) {
-                throw new IOException("Cannot publish more bytes due to a connection close.", e);
-            }
-        }
-
-        @Override
-        public void write(byte[] b, int off, int len) throws IOException {
-            try {
-                super.write(b, off, len);
-            } catch (ConnectionClosedException e) {
-                throw new IOException("Cannot publish more bytes due to a connection close.", e);
-            }
-        }
-
-        @Override
-        public void write(int b) throws IOException {
-            try {
-                super.write(b);
-            } catch (ConnectionClosedException e) {
-                throw new IOException("Cannot publish more bytes due to a connection close.", e);
-            }
-        }
-
-        @Override
-        public void close() throws IOException {
-            try {
-                super.close();
-            } catch (ConnectionClosedException e) {
-                throw new IOException("Cannot close the connection because it's already closed.", e);
-            }
-        }
-
-        @Override
-        public void flush() throws IOException {
-            try {
-                super.flush();
-            } catch (ConnectionClosedException e) {
-                throw new IOException("Cannot flush on the connection because it's closed.", e);
-            }
-        }
-    };
+    private final DataChunkOutputStream<ByteBuffer> publisher;
 
     private final ServerResponse res;
     private final ServerRequest req;
@@ -100,6 +58,7 @@ class ResponseWriter implements ContainerResponseWriter {
         this.res = res;
         this.req = req;
         this.whenHandleFinishes = whenHandleFinishes;
+        this.publisher = new DataChunkOutputStream<>(new SharedBuffersArena());
     }
 
     @Override
@@ -133,8 +92,8 @@ class ResponseWriter implements ContainerResponseWriter {
             res.headers().put(entry.getKey(), entry.getValue());
         }
 
-        res.send(publisher
-                .map(byteBuffer -> DataChunk.create(doFlush(context, byteBuffer), true, byteBuffer)));
+        publisher.setAutoflush(MediaType.SERVER_SENT_EVENTS_TYPE.isCompatible(context.getMediaType()));
+        res.send(publisher);
 
         return publisher;
     }
@@ -178,18 +137,205 @@ class ResponseWriter implements ContainerResponseWriter {
         return false;
     }
 
-    /**
-     * Flush buffer if using SSE or if an empty buffer is received for writing. See
-     * {@link io.helidon.common.reactive.MultiFromOutputStream#flush()}.
-     * Manual flushing is required to support
-     * {@link javax.ws.rs.core.StreamingOutput} in MP.
-     *
-     * @param context The container response.
-     * @param byteBuffer The byte buffer to write.
-     * @return Outcome of test.
-     */
-    private static boolean doFlush(ContainerResponse context, ByteBuffer byteBuffer) {
-        return MediaType.SERVER_SENT_EVENTS_TYPE.isCompatible(context.getMediaType())
-                || byteBuffer.hasArray() && byteBuffer.array().length == 0;
+    private static class DataChunkOutputStream<T> extends OutputStream implements Flow.Publisher<DataChunk>, Flow.Subscription {
+        private byte[] ONE_BYTE;
+        private static final ByteBuffer ZERO_BUF = ByteBuffer.allocate(0);
+        private ByteBuffer buf;
+        private T tok;
+
+        private boolean autoflush;
+
+        private Arena<T> arena;
+
+        public DataChunkOutputStream(Arena<T> arena) {
+           this.arena = arena;
+        }
+
+        public void setAutoflush(boolean autoflush) {
+           this.autoflush = autoflush;
+        }
+
+        public void write(int b) throws IOException {
+           if (ONE_BYTE == null) {
+              ONE_BYTE = new byte[1];
+           }
+           ONE_BYTE[0] = (byte)b;
+           write(ONE_BYTE, 0, 1);
+        }
+
+        public void write(byte[] b, int off, int len) throws IOException {
+           while(len > 0) {
+              if (buf == null) {
+                 awaitRequest(); // await for request
+                 buf = alloc();  // and then for a buffer
+              }
+
+              int rem = Math.min(buf.remaining(), len);
+              buf.put(b, off, rem);
+              off += rem;
+              len -= rem;
+              if (buf.remaining() == 0) {
+                 buf.flip();
+                 buf = null;
+                 publish(autoflush, tok);
+                 tok = null;
+              }
+           }
+        }
+
+        public void flush() throws IOException {
+           if (buf == null) {
+              awaitRequest();
+              publish(true, null);
+           } else {
+              buf.flip();
+              buf = null;
+              publish(true, tok);
+              tok = null;
+           }
+        }
+
+        public void close() throws IOException {
+           if (buf != null) {
+              flush();
+           }
+
+           long r = error();
+           if (r == CANCEL || r == ERROR) {
+              return;
+           }
+
+           downstream.onComplete();
+        }
+
+        protected void publish(boolean doFlush, T tok) {
+           DataChunk d = tok == null ? DataChunk.create(doFlush, true, ZERO_BUF): arena.dataChunk(doFlush, tok);
+
+           if (requested.get() >= 0) {
+              downstream.onNext(d);
+           } else {
+              d.release();
+              error();
+           }
+        }
+
+        protected long error() {
+           long r = requested.get();
+           if (r == ERROR) {
+              r = requested.getAndSet(CANCEL);
+              if (r == ERROR) {
+                 downstream.onError(new IllegalArgumentException("Bad request is not allowed"));
+              }
+           }
+
+           return r;
+        }
+
+        protected ByteBuffer alloc() {
+           tok = arena.alloc();
+           return arena.byteBuffer(tok);
+        }
+
+        private Flow.Subscriber downstream;
+        private Semaphore sema;
+        private AtomicLong requested = new AtomicLong();
+        private static final long CANCEL = Long.MIN_VALUE;
+        private static final long ERROR = CANCEL + 1;
+        private static final long WAIT = -1;
+
+        protected void awaitRequest() throws IOException {
+           if (requested.get() == 0 && sema == null) {
+              sema = new Semaphore(0);
+           }
+           long req = requested.getAndUpdate(r -> r + 1 > 0? r-1: r);
+           if (req == 0) {
+              sema.acquireUninterruptibly();
+              req = requested.get();
+           }
+
+           if (req == ERROR) {
+              error();
+              req = CANCEL;
+           }
+
+           if (req == CANCEL) {
+              throw new IOException("Bad news: the stream has been closed");
+           }
+        }
+
+        public void subscribe(Flow.Subscriber<? super DataChunk> sub) {
+           downstream = sub;
+           sub.onSubscribe(this);
+        }
+
+        public void cancel() {
+           long r = requested.getAndSet(CANCEL);
+
+           if (r == WAIT) {
+              sema.release();
+           }
+        }
+
+        public void request(long n) {
+           if (n <= 0) {
+              long req = requested.getAndUpdate(r -> r != CANCEL? ERROR: r);
+              if (req == WAIT) {
+                 sema.release();
+              }
+              return;
+           }
+
+           long req = requested.getAndUpdate(r -> r == WAIT? n - 1:
+                                                  r < 0? r:
+                                                  Long.MAX_VALUE - n > r? r + n: Long.MAX_VALUE
+                                          );
+
+           if (req == WAIT) {
+              sema.release();
+           }
+        }
+    }
+
+    public interface Arena<T> {
+        /**
+         * Returns arena-specific token T. May block, if arena has a size bound.
+         */
+        public T alloc();
+
+        /**
+         * Returns writeable ByteBuffer for the arena-specific token T
+         */
+        public ByteBuffer byteBuffer(T tok);
+
+        /**
+         * Constructs a read-only DataChunk for the arena-specific token T, whose
+         * ByteBuffer has been filled, and ready to be read from.
+         */
+        public DataChunk dataChunk(boolean doFlush, T tok);
+    }
+
+    public static class SharedBuffersArena implements Arena<ByteBuffer> { // you don't really want to manage thit stuff here, ad-hoc
+                                                                          // you actually want to wire Netty's buffer management
+                                                                          // eg NettyBuffersArena<ByteBuf>
+        private static final ConcurrentLinkedQueue<ByteBuffer> shared = new ConcurrentLinkedQueue<>();
+
+        public DataChunk dataChunk(boolean doFlush, ByteBuffer b) {
+           return DataChunk.create(doFlush, true, () -> {
+                 b.clear();
+                 shared.offer(b);
+              }, b);
+        }
+
+        public ByteBuffer alloc() {
+           ByteBuffer buf = shared.poll();
+           if (buf == null) {
+              buf = ByteBuffer.allocate(4096);
+           }
+           return buf;
+        }
+
+        public ByteBuffer byteBuffer(ByteBuffer b) {
+           return b;
+        }
     }
 }

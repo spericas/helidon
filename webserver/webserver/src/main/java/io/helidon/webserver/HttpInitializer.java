@@ -22,6 +22,8 @@ import java.security.cert.X509Certificate;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.logging.Logger;
+import java.lang.ref.Reference;
+import java.lang.ref.ReferenceQueue;
 
 import javax.net.ssl.SSLEngine;
 import javax.net.ssl.SSLPeerUnverifiedException;
@@ -60,7 +62,8 @@ class HttpInitializer extends ChannelInitializer<SocketChannel> {
     private final NettyWebServer webServer;
     private final SocketConfiguration soConfig;
     private final Routing routing;
-    private final Queue<ReferenceHoldingQueue<DataChunk>> queues = new ConcurrentLinkedQueue<>();
+    private final ReferenceQueue refQ = new ReferenceQueue();
+    private final Queue<ReferenceHoldingQueue> queues = new ConcurrentLinkedQueue<>();
 
     HttpInitializer(SocketConfiguration soConfig,
                     SslContext sslContext,
@@ -73,10 +76,26 @@ class HttpInitializer extends ChannelInitializer<SocketChannel> {
     }
 
     private void clearQueues() {
+        for(Reference r = refQ.poll(); r != null; r = refQ.poll()) {
+           if (!(r instanceof ReferenceHoldingQueue.IndirectReference)) {
+              continue;
+           }
+
+           ReferenceHoldingQueue q = ((ReferenceHoldingQueue.IndirectReference<ReferenceHoldingQueue>)r).acquire();
+
+           if (q == null) {
+              continue;
+           }
+
+           if (!q.release()) {
+              queues.add(q);
+           }
+        }
         queues.removeIf(ReferenceHoldingQueue::release);
     }
 
     void queuesShutdown() {
+        clearQueues();
         queues.removeIf(queue -> {
             queue.shutdown();
             return true;
@@ -132,7 +151,7 @@ class HttpInitializer extends ChannelInitializer<SocketChannel> {
         }
 
         // Helidon's forwarding handler
-        p.addLast(new ForwardingHandler(routing, webServer, sslEngine, queues, requestDecoder));
+        p.addLast(new ForwardingHandler(routing, webServer, sslEngine, refQ, requestDecoder));
 
         // Cleanup queues as part of event loop
         ch.eventLoop().execute(this::clearQueues);
