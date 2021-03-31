@@ -53,7 +53,7 @@ public class Coordinator implements Runnable {
     private boolean isTimeoutThreadRunning;
 
     Map<String, LRA> lraMap = new ConcurrentHashMap();
-    static String coordinatorURL = "http://127.0.0.1:8070/lra-coordinator/";
+    static String coordinatorURL = "http://localhost:8070/lra-coordinator/";
 
     public void init(@Observes @Initialized(ApplicationScoped.class) Object init) {
         LOGGER.info("Coordinator init");
@@ -129,7 +129,7 @@ public class Coordinator implements Runnable {
         URI lraId = null;
         try {
             String lraUUID = "LRAID" + UUID.randomUUID().toString(); //todo better UUID
-            lraId = new URI(String.format("%s/%s", coordinatorURL, lraUUID)); //todo verify
+            lraId = new URI(coordinatorURL + lraUUID); //todo verify
             String rootParentOrChild = "parent(root)";
             if (parentLRA != null && !parentLRA.isEmpty()) {
                 LRA parent = lraMap.get(parentLRA.replace(coordinatorURL, ""));  //todo resolve coordinatorUrl here with member coordinatorURL

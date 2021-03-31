@@ -46,6 +46,7 @@ public class RestParticipant extends Participant {
     void sendCompleteOrCancel(LRA lra, boolean isCancel) {
         URI endpointURI = isCancel ? getCompensateURI() : getCompleteURI();
         try {
+            logParticipantMessageWithTypeAndDepth("RestParticipant " + " endpointURI: " + endpointURI, lra.nestedDepth);
             Response response = sendCompleteOrCompensate(lra, endpointURI, isCancel);
             int responsestatus = response.getStatus(); // expected codes 200, 202, 409, 410
             String readEntity = response.readEntity(String.class);
@@ -88,6 +89,7 @@ public class RestParticipant extends Participant {
         try {
             URI afterURI = getAfterURI();
             if (afterURI != null) {
+                logParticipantMessageWithTypeAndDepth("RestParticipant " + " afterURI: " + afterURI, lra.nestedDepth);
                 if (isAfterLRASuccessfullyCalledIfEnlisted()) return;
                 Response response = client.target(afterURI)
                         .request()

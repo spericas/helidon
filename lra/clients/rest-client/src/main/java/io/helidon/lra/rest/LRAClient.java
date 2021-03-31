@@ -70,7 +70,7 @@ public class LRAClient implements Closeable {
 
     public LRAClient() {
         this(System.getProperty(LRAClient.LRA_COORDINATOR_URL_KEY,
-                "http://localhost:8080/" + COORDINATOR_PATH_NAME));
+                "http://localhost:8070/" + COORDINATOR_PATH_NAME));
     }
 
     public LRAClient(String coordinatorUrl) {
