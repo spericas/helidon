@@ -19,10 +19,13 @@ package io.helidon.microprofile.arquillian;
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
+import java.util.Collections;
 import java.util.Objects;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 import java.util.logging.Logger;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import javax.enterprise.context.control.RequestContextController;
@@ -131,14 +134,27 @@ public class HelidonMethodExecutor implements ContainerMethodExecutor {
      * @param annotClass Annotation to look for.
      */
     private static void invokeAnnotated(Object object, Class<? extends Annotation> annotClass) {
-        AtomicReference<Class<?>> clazz = new AtomicReference<>(object.getClass());
+        invokeAnnotated(object, object.getClass(), annotClass, Collections.emptySet());
+    }
 
-        Stream.generate(() -> clazz.getAndUpdate(old -> old == null ? null : old.getSuperclass()))
-                .takeWhile(Objects::nonNull)
-                .map(Class::getDeclaredMethods)
-                .flatMap(Stream::of)
+    private static void invokeAnnotated(Object object, Class<?> clazz,
+                                        Class<? extends Annotation> annotClass, Set<Method> overridden) {
+        // Collect list of candidates
+        Set<Method> invocable = Stream.of(clazz.getDeclaredMethods())
                 .filter(m -> m.getAnnotation(annotClass) != null)
-                .forEach(rethrow(m -> m.invoke(object)));
+                .collect(Collectors.toSet());
+
+        // First call superclass methods
+        Class<?> superClass = clazz.getSuperclass();
+        if (superClass != null) {
+            invokeAnnotated(object, superClass, annotClass, invocable);
+        }
+
+        // Invoke all candidates skipping those that are overridden. Methods compared
+        // by name only since they typically have no params.
+        invocable.stream()
+                 .filter(m -> overridden.stream().map(Method::getName).noneMatch(s -> s.equals(m.getName())))
+                 .forEach(rethrow(m -> m.invoke(object)));
     }
 
     static <T> Consumer<? super T> rethrow(ThrowingConsumer<T> consumer) {
