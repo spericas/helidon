@@ -14,4 +14,4 @@
 # limitations under the License.
 #
 
-io.helidon.lra.rest.LRAParticipantRegistry
+io.helidon.lra.rest.LRAAutoDiscoverable
