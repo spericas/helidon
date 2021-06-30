@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2020 Oracle and/or its affiliates.
+ * Copyright (c) 2018, 2021 Oracle and/or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,13 +17,16 @@
 package io.helidon.metrics;
 
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Stream;
 
 import javax.json.Json;
+import javax.json.JsonNumber;
 import javax.json.JsonObject;
 import javax.json.JsonObjectBuilder;
 
 import org.eclipse.microprofile.metrics.Metadata;
 import org.eclipse.microprofile.metrics.MetricID;
+import org.eclipse.microprofile.metrics.MetricRegistry;
 import org.eclipse.microprofile.metrics.MetricType;
 import org.eclipse.microprofile.metrics.MetricUnits;
 import org.eclipse.microprofile.metrics.Snapshot;
@@ -220,5 +223,54 @@ class HelidonTimerTest {
                                                           + "# HELP application_response_time_seconds Server response time for "
                                                           + "/index.html\n"
                                                           + "application_response_time_seconds_count 200"));
+    }
+
+    @Test
+    void testNaNAvoidance() {
+        TestClock testClock = TestClock.create();
+        HelidonTimer helidonTimer = HelidonTimer.create("application", meta, testClock);
+        MetricID metricID = new MetricID("idleTimer");
+
+        JsonObjectBuilder builder = MetricImpl.JSON.createObjectBuilder();
+        helidonTimer.update(1L, TimeUnit.MILLISECONDS);
+
+        for (int i = 1; i < 48; i++) {
+            testClock.add(1L, TimeUnit.HOURS);
+            try {
+                helidonTimer.jsonData(builder, metricID);
+            } catch (Throwable t) {
+                fail("Failed after simulating " + i + " hours");
+            }
+        }
+    }
+
+    @Test
+    void testUnitsOnHistogram() {
+        TestClock testClock = TestClock.create();
+        String timerName = "jsonDataUnitsTimer";
+        Metadata metadata = Metadata.builder()
+                .withName(timerName)
+                .withDisplayName("Response time test")
+                .withDescription("Server response time for checking histo units")
+                .withType(MetricType.TIMER)
+                .withUnit(MetricUnits.MILLISECONDS)
+                .build();
+
+        HelidonTimer helidonTimer = HelidonTimer.create(MetricRegistry.Type.APPLICATION.getName(), metadata, testClock);
+
+        Stream.of(24L, 28L, 32L, 36L)
+                .forEach(value -> {
+                    testClock.addNanos(450, TimeUnit.MILLISECONDS);
+                    helidonTimer.update(value, TimeUnit.MILLISECONDS);
+                });
+        MetricID timerID = new MetricID(timerName);
+        JsonObjectBuilder builder = Json.createObjectBuilder();
+        helidonTimer.jsonData(builder, timerID);
+        JsonObject jsonObject = builder.build();
+        JsonObject metricObject = jsonObject.getJsonObject(timerName);
+        assertThat("Metric JSON object", metricObject, is(notNullValue()));
+        JsonNumber jsonNumber = metricObject.getJsonNumber("min");
+        assertThat("Min JSON value", jsonNumber, is(notNullValue()));
+        assertThat("Min histo value", jsonNumber.longValue(), is(24L));
     }
 }

@@ -16,6 +16,7 @@
 package io.helidon.examples.media.multipart;
 
 import io.helidon.common.http.Http;
+import io.helidon.common.reactive.Single;
 import io.helidon.media.jsonp.JsonpSupport;
 import io.helidon.media.multipart.MultiPartSupport;
 import io.helidon.webserver.Routing;
@@ -50,20 +51,28 @@ public final class Main {
     }
 
     /**
-     * Executes the example.
-     *
+     * Application main entry point.
      * @param args command line arguments.
      */
-    public static void main(String[] args) {
+    public static void main(final String[] args) {
+        startServer();
+    }
 
+    /**
+     * Start the server.
+     * @return the created {@link WebServer} instance
+     */
+    static Single<WebServer> startServer() {
         WebServer server = WebServer.builder(createRouting())
                 .port(8080)
                 .addMediaSupport(MultiPartSupport.create())
                 .addMediaSupport(JsonpSupport.create())
                 .build();
 
+        Single<WebServer> webserver = server.start();
+
         // Start the server and print some info.
-        server.start().thenAccept(ws -> {
+        webserver.thenAccept(ws -> {
             System.out.println("WEB server is up! http://localhost:" + ws.port());
         });
 
@@ -71,5 +80,8 @@ public final class Main {
         server.whenShutdown()
                 .thenRun(() -> System.out.println("WEB server is DOWN. Good bye!"));
 
+        return webserver;
     }
+
+
 }

@@ -24,7 +24,7 @@
     <parent>
         <groupId>io.helidon.webserver</groupId>
         <artifactId>helidon-webserver-project</artifactId>
-        <version>2.3.0-SNAPSHOT</version>
+        <version>2.3.2-SNAPSHOT</version>
     </parent>
     <artifactId>helidon-webserver-jersey</artifactId>
     <name>Helidon WebServer Jersey</name>
@@ -55,13 +55,16 @@
             <artifactId>helidon-jersey-server</artifactId>
         </dependency>
         <dependency>
-            <groupId>io.helidon.webserver</groupId>
-            <artifactId>helidon-webserver-test-support</artifactId>
-            <scope>test</scope>
+            <groupId>io.netty</groupId>
+            <artifactId>netty-buffer</artifactId>
         </dependency>
         <dependency>
             <groupId>io.helidon.jersey</groupId>
             <artifactId>helidon-jersey-client</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.helidon.webserver</groupId>
+            <artifactId>helidon-webserver-test-support</artifactId>
             <scope>test</scope>
         </dependency>
         <dependency>
@@ -78,6 +81,10 @@
                     <artifactId>jakarta.activation</artifactId>
                 </exclusion>
             </exclusions>
+        </dependency>
+        <dependency>
+            <groupId>org.glassfish.jersey.inject</groupId>
+            <artifactId>jersey-hk2</artifactId>
         </dependency>
         <dependency>
             <groupId>org.glassfish.jersey.connectors</groupId>
