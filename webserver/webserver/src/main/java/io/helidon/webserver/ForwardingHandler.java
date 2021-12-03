@@ -16,6 +16,7 @@
 
 package io.helidon.webserver;
 
+import javax.net.ssl.SSLEngine;
 import java.io.IOException;
 import java.lang.ref.ReferenceQueue;
 import java.util.ArrayList;
@@ -30,16 +31,12 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
-import javax.net.ssl.SSLEngine;
-
 import io.helidon.common.context.Context;
-import io.helidon.common.context.Contexts;
 import io.helidon.common.http.Http;
 import io.helidon.logging.common.HelidonMdc;
 import io.helidon.webserver.ByteBufRequestChunk.DataChunkHoldingQueue;
 import io.helidon.webserver.DirectHandler.TransportResponse;
 import io.helidon.webserver.ReferenceHoldingQueue.IndirectReference;
-
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.ChannelFutureListener;
@@ -156,6 +153,8 @@ public class ForwardingHandler extends SimpleChannelInboundHandler<Object> {
     protected void channelRead0(ChannelHandlerContext ctx, Object msg) {
         if (msg instanceof HttpRequest) {
             Context requestScope = Context.create(webServer.context());
+
+            /*
             requestScope.register(WebServer.class.getName() + ".connection",
                                   "0x" + ctx.channel().id());
 
@@ -163,11 +162,16 @@ public class ForwardingHandler extends SimpleChannelInboundHandler<Object> {
 
             boolean shouldReturn = Contexts.runInContext(requestScope,
                                                          () -> channelReadHttpRequest(ctx, requestScope, msg));
+             */
 
+            channelReadHttpRequest(ctx, requestScope, msg);
+
+            /*
             if (shouldReturn) {
                 HelidonMdc.remove(MDC_SCOPE_ID);
                 return;
             }
+             */
         }
 
         if (requestContext != null) {
