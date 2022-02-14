@@ -210,7 +210,7 @@ public abstract class AbstractStatement<S extends DbStatement<S, R>, R> implemen
      *
      * @return text of this statement
      */
-    protected String statement() {
+    public String statement() {
         return statementContext.statement();
     }
 

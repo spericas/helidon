@@ -57,6 +57,10 @@ public interface DbClient {
      */
     <U, T extends Subscribable<U>> T execute(Function<DbExecute, T> executor);
 
+    default Single<Long> batch(Function<DbBatch, Single<Long>> batch) {
+        throw new UnsupportedOperationException("Not implemented");
+    }
+
     /**
      * Type of this database provider (such as jdbc:mysql, mongoDB etc.).
      *

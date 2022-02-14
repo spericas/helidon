@@ -16,24 +16,31 @@
 package io.helidon.dbclient.jdbc;
 
 import java.sql.Connection;
+import java.sql.PreparedStatement;
 import java.sql.SQLException;
+import java.sql.Statement;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ExecutorService;
+import java.util.function.BiConsumer;
 import java.util.function.Function;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import java.util.stream.Stream;
 
 import io.helidon.common.mapper.MapperManager;
 import io.helidon.common.reactive.Multi;
 import io.helidon.common.reactive.Single;
 import io.helidon.common.reactive.Subscribable;
+import io.helidon.dbclient.DbBatch;
 import io.helidon.dbclient.DbClient;
 import io.helidon.dbclient.DbClientException;
 import io.helidon.dbclient.DbClientService;
 import io.helidon.dbclient.DbExecute;
 import io.helidon.dbclient.DbMapperManager;
+import io.helidon.dbclient.DbStatement;
 import io.helidon.dbclient.DbStatementDml;
 import io.helidon.dbclient.DbStatementGet;
 import io.helidon.dbclient.DbStatementQuery;
@@ -219,6 +226,18 @@ class JdbcDbClient implements DbClient {
         }
     }
 
+    @Override
+    public Single<Long> batch(Function<DbBatch, Single<Long>> batch) {
+        JdbcBatch jdbcBatch = new JdbcBatch(statements,
+                JdbcExecute.createContext(statements,
+                        executorService,
+                        clientServices,
+                        connectionPool,
+                        dbMapperManager,
+                        mapperManager));
+        return batch.apply(jdbcBatch);
+    }
+
     private static final class JdbcTxExecute extends JdbcExecute implements DbTransaction {
 
         private volatile boolean setRollbackOnly = false;
@@ -389,4 +408,138 @@ class JdbcDbClient implements DbClient {
 
     }
 
+    private static class JdbcBatch extends JdbcExecute implements DbBatch {
+
+        private JdbcBatchMulti<?> multi;
+
+        private List<JdbcStatementDml> statements;
+
+        private JdbcBatch(DbStatements statements, JdbcExecuteContext context) {
+            super(statements, context);
+        }
+
+        @Override
+        public DbStatementDml createInsert(String statement) {
+            assert multi == null;      // cannot mix
+            if (statements == null) {
+                statements = new ArrayList<>();
+            }
+            JdbcStatementDml stmt = (JdbcStatementDml) super.createInsert(statement);
+            statements.add(stmt);
+            return stmt;
+        }
+
+        @Override
+        public <T> DbBatchMulti<T> createInsertMulti(String statement, Multi<T> multi) {
+            assert statements == null;          // cannot mix
+            this.multi = new JdbcBatchMulti<>((JdbcStatementDml) createInsert(statement), multi);
+            return (DbBatchMulti<T>) this.multi;
+        }
+
+        @Override
+        public <T> DbBatchMulti<T> createUpdateMulti(String statement, Multi<T> multi) {
+            throw new UnsupportedOperationException("Not implemented");
+        }
+
+        @Override
+        public <T> DbBatchMulti<T> createDeleteMulti(String statement, Multi<T> multi) {
+            throw new UnsupportedOperationException("Not implemented");
+        }
+
+        @Override
+        public <T> DbBatchMulti<T> createNamedInsertMulti(String statementName, Multi<T> multi) {
+            throw new UnsupportedOperationException("Not implemented");
+        }
+
+        @Override
+        public <T> DbBatchMulti<T> createNamedUpdateMulti(String statementName, Multi<T> multi) {
+            throw new UnsupportedOperationException("Not implemented");
+        }
+
+        @Override
+        public <T> DbBatchMulti<T> createNamedDeleteMulti(String statementName, Multi<T> multi) {
+            throw new UnsupportedOperationException("Not implemented");
+        }
+
+        @Override
+        public Multi<Long> execute() {
+            if (multi != null) {
+                return multi.execute();
+            } else if (statements != null) {
+                try {
+                    return context().connection().thenApply(c -> {
+                        try {
+                            Statement stmt = c.createStatement();
+                            statements.forEach(s -> {
+                                try {
+                                    stmt.addBatch(s.statement());
+                                } catch (SQLException e) {
+                                    // TODO
+                                }
+                            });
+
+                            // TODO: run following statement in executor
+                            int[] rs = stmt.executeBatch();
+                            return Multi.create(Stream.of(rs));
+                        } catch (SQLException e) {
+                            // TODO
+                        }
+                    }).toCompletableFuture().get();
+                } catch (Exception e) {
+                    throw new RuntimeException(e);
+                }
+            } else {
+                return Multi.error(new IllegalStateException("DbClient batch is empty"));
+            }
+        }
+
+        private class JdbcBatchMulti<T> implements DbBatchMulti<T> {
+
+            private final JdbcStatementDml statement;
+            private final Multi<T> multi;
+            private BiConsumer<JdbcStatementDml, T> prepare;
+
+            JdbcBatchMulti(JdbcStatementDml statement, Multi<T> multi) {
+                this.statement = statement;
+                this.multi = multi;
+            }
+
+            @Override
+            @SuppressWarnings("unchecked")
+            public <D extends DbStatement<D, Single<Long>>, U extends DbStatement<D, Single<Long>>>
+                    DbBatch prepare(BiConsumer<U, T> consumer) {
+                prepare = (BiConsumer<JdbcStatementDml, T>) consumer;
+                return JdbcBatch.this;
+            }
+
+            @Override
+            public Multi<Long> execute() {
+                Single<Connection> single = Single.create(context().connection());
+                return Multi.create(single.map(c -> {
+                    try {
+                        PreparedStatement ps = c.prepareStatement(statement.statement());
+                        multi.forEach(m -> {
+                            // Invoke user's code
+                            prepare.accept(statement, m);
+
+                            // TODO: Mapped params to JDBC statement
+
+                            // Add new batch
+                            try {
+                                ps.addBatch();
+                            } catch (SQLException e) {
+                                // TODO
+                            }
+                        });
+
+                        // TODO: run following statement in executor
+                        return ps.executeLargeUpdate();
+                    } catch (SQLException e) {
+                        // TODO
+                    }
+                    return 0L;
+                }));
+            }
+        }
+    }
 }

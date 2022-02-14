@@ -19,8 +19,10 @@ package io.helidon.examples.dbclient.jdbc;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
+import io.helidon.common.reactive.Multi;
 import io.helidon.dbclient.DbClient;
 import io.helidon.examples.dbclient.common.AbstractPokemonService;
+import io.helidon.examples.dbclient.common.Pokemon;
 import io.helidon.webserver.ServerRequest;
 import io.helidon.webserver.ServerResponse;
 
@@ -57,10 +59,39 @@ public class PokemonService extends AbstractPokemonService {
                 .execute())
                 .thenAccept(count -> response.send("Deleted: " + count + " values"))
                 .exceptionally(throwable -> sendError(throwable, response));
+
+        dbClient().execute(exec -> exec
+                .createInsert("INSERT INTO pokemons VALUES (?,?)")
+                .addParam("name1").addParam("type")
+                .execute())
+                .thenAccept(count -> response.send("Inserted: " + count + " values"))
+                .exceptionally(throwable -> sendError(throwable, response));
     }
 
+    protected void batchMixedStatements(ServerRequest request, ServerResponse response) {
+        dbClient().batch(b -> b
+                .createInsert("INSERT INTO pokemons VALUES (?,?)")
+                        .addParam("name1").addParam("type").add(b)
+                .createNamedUpdate("update1")
+                        .addParam("name", "name1")
+                        .addParam("type", "type1").execute())
+                .thenAccept(count -> response.send("Modified: " + count + " values"))
+                .exceptionally(throwable -> sendError(throwable, response));
+    }
 
+    protected void batchMultiStatement(ServerRequest request, ServerResponse response) {
+        dbClient().batch(b -> b
+                .createInsertMulti("INSERT INTO pokemons VALUES (?,?)", getPokemons())
+                .prepare((s, p) -> {
+                    s.addParam(p.getName());
+                    s.addParam(p.getType());
+                })
+                .execute())
+                .thenAccept(count -> response.send("Modified: " + count + " values"))
+                .exceptionally(throwable -> sendError(throwable, response));
+    }
 
-
-
+    private Multi<Pokemon> getPokemons() {
+        return Multi.empty();
+    }
 }

@@ -355,6 +355,10 @@ public interface DbExecute {
         return createDmlStatement(statement).params(parameters).execute();
     }
 
+    default DbBatch batch() {
+        throw new UnsupportedOperationException("Not implemented");
+    }
+
     /*
      * Unwrap support
      */

@@ -80,12 +80,10 @@
             <artifactId>mysql-connector-java</artifactId>
         </dependency>
 -->
-<!--
         <dependency>
             <groupId>io.helidon.integrations.db</groupId>
             <artifactId>h2</artifactId>
         </dependency>
--->
 <!-- -->
         <dependency>
             <groupId>io.helidon.integrations.db</groupId>

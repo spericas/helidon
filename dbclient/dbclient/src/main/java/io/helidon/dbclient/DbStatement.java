@@ -109,4 +109,8 @@ public interface DbStatement<D extends DbStatement<D, R>, R> {
      * @return The result of this statement, never blocking.
      */
     R execute();
+
+    default DbBatch add(DbBatch dbBatch) {
+        return dbBatch;
+    }
 }
