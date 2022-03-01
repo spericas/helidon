@@ -32,9 +32,15 @@ module io.helidon.microprofile.cors {
     // ---
     requires jersey.common;
     requires microprofile.config.api;
+    requires jakarta.enterprise.cdi.api;
+    requires jakarta.interceptor.api;
+    requires org.jboss.jandex;
 
     exports io.helidon.microprofile.cors;
 
     provides org.glassfish.jersey.internal.spi.AutoDiscoverable
             with io.helidon.microprofile.cors.CrossOriginAutoDiscoverable;
+
+    provides javax.enterprise.inject.spi.Extension with
+            io.helidon.microprofile.cors.CrossOriginCdiExtension;
 }
