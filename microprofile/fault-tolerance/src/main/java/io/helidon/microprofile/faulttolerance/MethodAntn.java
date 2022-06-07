@@ -248,7 +248,7 @@ abstract class MethodAntn {
                                                  BeanManager beanManager) {
         Set<? extends Annotation> set = ANNOTATION_FINDER.findAnnotations(Set.of(c.getAnnotations()), beanManager);
         return set.stream()
-                .filter(a -> a.annotationType().equals(annotClass))
+                .filter(a -> a.annotationType().getName().equals(annotClass.getName()))
                 .findFirst()
                 .orElse(null);
     }
@@ -258,7 +258,7 @@ abstract class MethodAntn {
                                                  BeanManager beanManager) {
         Set<? extends Annotation> set = ANNOTATION_FINDER.findAnnotations(type.getAnnotations(), beanManager);
         return set.stream()
-                .filter(a -> a.annotationType().equals(annotClass))
+                .filter(a -> a.annotationType().getName().equals(annotClass.getName()))
                 .findFirst()
                 .orElse(null);
     }

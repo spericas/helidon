@@ -45,7 +45,7 @@ public class AnnotationFinder {
             "java.",
             "javax.",
             "jakarta.",
-            "org.microprofile."
+            "org.eclipse.microprofile."
     };
 
     private final Package pkg;
