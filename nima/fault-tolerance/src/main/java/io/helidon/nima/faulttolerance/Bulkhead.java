@@ -16,11 +16,9 @@
 
 package io.helidon.nima.faulttolerance;
 
-import java.util.Objects;
-import java.util.concurrent.ExecutorService;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionStage;
 import java.util.function.Supplier;
-
-import io.helidon.common.LazyValue;
 
 /**
  * Bulkhead protects a resource that cannot serve unlimited parallel
@@ -41,47 +39,7 @@ public interface Bulkhead extends FtHandler {
         return new Builder();
     }
 
-    /**
-     * Provides access to internal stats for this bulkhead.
-     *
-     * @return internal stats.
-     */
-    Stats stats();
-
-    /**
-     * Provides statistics during the lifetime of a bulkhead, such as
-     * concurrent executions, accepted/rejected calls and queue size.
-     */
-    interface Stats {
-
-        /**
-         * Number of concurrent executions at this time.
-         *
-         * @return concurrent executions.
-         */
-        long concurrentExecutions();
-
-        /**
-         * Number of calls accepted on the bulkhead.
-         *
-         * @return calls accepted.
-         */
-        long callsAccepted();
-
-        /**
-         * Number of calls rejected on the bulkhead.
-         *
-         * @return calls rejected.
-         */
-        long callsRejected();
-
-        /**
-         * Size of waiting queue at this time.
-         *
-         * @return size of waiting queue.
-         */
-        long waitingQueueSize();
-    }
+    <T> CompletableFuture<T> invokeAsync(Supplier<? extends CompletionStage<T>> supplier);
 
     /**
      * Fluent API builder for {@link io.helidon.nima.faulttolerance.Bulkhead}.
@@ -90,7 +48,6 @@ public interface Bulkhead extends FtHandler {
         private static final int DEFAULT_LIMIT = 10;
         private static final int DEFAULT_QUEUE_LENGTH = 10;
 
-        private LazyValue<? extends ExecutorService> executor = FaultTolerance.executor();
         private int limit = DEFAULT_LIMIT;
         private int queueLength = DEFAULT_QUEUE_LENGTH;
         private String name = "Bulkhead-" + System.identityHashCode(this);
@@ -101,17 +58,6 @@ public interface Bulkhead extends FtHandler {
         @Override
         public Bulkhead build() {
             return new BulkheadImpl(this);
-        }
-
-        /**
-         * Configure executor service to use for executing tasks asynchronously.
-         *
-         * @param executor executor service supplier
-         * @return updated builder instance
-         */
-        public Builder executor(Supplier<? extends ExecutorService> executor) {
-            this.executor = LazyValue.create(Objects.requireNonNull(executor));
-            return this;
         }
 
         /**
@@ -156,10 +102,6 @@ public interface Bulkhead extends FtHandler {
 
         int queueLength() {
             return queueLength;
-        }
-
-        LazyValue<? extends ExecutorService> executor() {
-            return executor;
         }
 
         String name() {

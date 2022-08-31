@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, 2022 Oracle and/or its affiliates.
+ * Copyright (c) 2022 Oracle and/or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,29 +16,35 @@
 
 package io.helidon.nima.faulttolerance;
 
-import java.lang.System.Logger.Level;
+import java.util.ArrayDeque;
+import java.util.Queue;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionStage;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.Semaphore;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Supplier;
 
 class BulkheadImpl implements Bulkhead {
-    private static final System.Logger LOGGER = System.getLogger(BulkheadImpl.class.getName());
 
+    private final Queue<DelayedTask<?>> queue;
     private final Semaphore inProgress;
     private final String name;
-    private final int maxQueue;
+
     private final AtomicLong concurrentExecutions = new AtomicLong(0L);
     private final AtomicLong callsAccepted = new AtomicLong(0L);
     private final AtomicLong callsRejected = new AtomicLong(0L);
-    private final AtomicInteger enqueued = new AtomicInteger();
 
-    BulkheadImpl(Builder builder) {
+    BulkheadImpl(Bulkhead.Builder builder) {
         this.inProgress = new Semaphore(builder.limit(), true);
         this.name = builder.name();
 
-        this.maxQueue = builder.queueLength();
-
+        if (builder.queueLength() == 0) {
+            queue = new NoQueue();
+        } else {
+            this.queue = new LinkedBlockingQueue<>(builder.queueLength());
+        }
     }
 
     @Override
@@ -47,78 +53,71 @@ class BulkheadImpl implements Bulkhead {
     }
 
     @Override
+    @SuppressWarnings("unchecked")
     public <T> T invoke(Supplier<? extends T> supplier) {
-
-        if (inProgress.tryAcquire()) {
-            if (LOGGER.isLoggable(Level.DEBUG)) {
-                LOGGER.log(Level.DEBUG, name + " invoke immediate " + supplier);
-            }
-            return execute(supplier);
-        }
-
-        int queueLength = enqueued.incrementAndGet();
-        if (queueLength > maxQueue) {
-            enqueued.decrementAndGet();
-            callsRejected.incrementAndGet();
-            throw new BulkheadException("Bulkhead queue \"" + name + "\" is full");
-        }
+        CompletableFuture<T> future = (CompletableFuture<T>) invokeAsync(() -> Async.invokeAsync(supplier));
         try {
-            // block current thread until permit available
-            inProgress.acquire();
-            enqueued.decrementAndGet();
-            if (LOGGER.isLoggable(Level.DEBUG)) {
-                LOGGER.log(Level.DEBUG, name + " invoking " + supplier);
-            }
-            return execute(supplier);
-        } catch (InterruptedException e) {
-            callsRejected.incrementAndGet();
-            throw new BulkheadException("Bulkhead \"" + name + "\" interrupted while acquiring");
+            return future.get();
+        } catch (InterruptedException | ExecutionException e) {
+            throw new RuntimeException(e.getCause() != null ? e.getCause() : e);
         }
     }
 
     @Override
-    public Stats stats() {
-        return new Stats() {
-            @Override
-            public long concurrentExecutions() {
-                return concurrentExecutions.get();
-            }
+    public <T> CompletableFuture<T> invokeAsync(Supplier<? extends CompletionStage<T>> supplier) {
+        return invokeTask(DelayedTask.createFuture(supplier));
+    }
 
-            @Override
-            public long callsAccepted() {
-                return callsAccepted.get();
+    // this method must be called while NOT holding a permit
+    @SuppressWarnings("unchecked")
+    private <R> R invokeTask(DelayedTask<R> task) {
+        if (inProgress.tryAcquire()) {
+            // free permit, we can invoke
+            execute(task);
+            return task.result();
+        } else {
+            // no free permit, let's try to enqueue
+            if (queue.offer(task)) {
+                return task.result();
+            } else {
+                callsRejected.incrementAndGet();
+                return task.error(new BulkheadException("Bulkhead queue \"" + name + "\" is full"));
             }
-
-            @Override
-            public long callsRejected() {
-                return callsRejected.get();
-            }
-
-            @Override
-            public long waitingQueueSize() {
-                return enqueued.get();
-            }
-        };
+        }
     }
 
     // this method must be called while holding a permit
-    private <T> T execute(Supplier<? extends T> task) {
+    private void execute(DelayedTask<?> task) {
         callsAccepted.incrementAndGet();
         concurrentExecutions.incrementAndGet();
-        try {
-            T result = task.get();
-            if (LOGGER.isLoggable(Level.DEBUG)) {
-                LOGGER.log(Level.DEBUG, name + " finished execution: " + task
-                        + " (success)");
-            }
-            return result;
-        } catch (Throwable t) {
-            LOGGER.log(Level.DEBUG, name + " finished execution: " + task
-                    + " (failure)", t);
-            throw t;
-        } finally {
-            concurrentExecutions.decrementAndGet();
-            inProgress.release();
+
+        task.execute()
+                .handle((it, throwable) -> {
+                    concurrentExecutions.decrementAndGet();
+                    DelayedTask<?> polled = queue.poll();
+                    if (polled != null) {
+                        Async.invokeAsync(() -> {
+                            execute(polled);
+                            return null;
+                        });
+                    } else {
+                        inProgress.release();
+                    }
+                    return null;
+                });
+    }
+
+    private static class NoQueue extends ArrayDeque<DelayedTask<?>> {
+        @Override
+        public boolean offer(DelayedTask delayedTask) {
+            return false;
+        }
+
+        @SuppressWarnings("ReturnOfNull")
+        @Override
+        public DelayedTask<?> poll() {
+            // this queue is empty, poll must return null
+            return null;
         }
     }
 }
