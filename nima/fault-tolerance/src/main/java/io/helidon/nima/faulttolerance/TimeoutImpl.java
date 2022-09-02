@@ -60,7 +60,11 @@ class TimeoutImpl implements Timeout {
             } catch (InterruptedException e) {
                 throw new TimeoutException("Call interrupted", e);
             } catch (ExecutionException e) {
-                throw new TimeoutException("Asynchronous execution error", e.getCause());
+                // Map java.util.concurrent.TimeoutException to Nima's TimeoutException
+                if (e.getCause() instanceof java.util.concurrent.TimeoutException) {
+                   throw new TimeoutException("Timeout reached", e.getCause().getCause());
+                }
+                throw new RuntimeException("Asynchronous execution error", e.getCause());
             }
         } else {
             Thread thisThread = Thread.currentThread();
