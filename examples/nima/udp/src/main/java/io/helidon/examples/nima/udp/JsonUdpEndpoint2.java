@@ -16,37 +16,30 @@
 
 package io.helidon.examples.nima.udp;
 
-import java.io.InputStream;
+import jakarta.inject.Inject;
 
 import jakarta.json.JsonObject;
 
-public interface UdpMessage {
+/**
+ * Example of UDP declarative endpoint.
+ */
+@UdpEndpointInfo(port=8433)
+class JsonUdpEndpoint2 {
 
-    UdpClient udpClient();
+    @Inject
+    UdpClient sender;
 
-    <T> T as(Class<T> clazz);
+    @Inject
+    JsonProcessor processor;
 
-    default JsonObject asJson() {
-        return as(JsonObject.class);
-    }
+    @Inject
+    @InetAddressInfo(host="udp.oracle.com", port=8888)
+    UdpClient forward;
 
-    default InputStream asInputStream() {
-        return as(InputStream.class);
-    }
-
-    default byte[] asByteArray() {
-        return as(byte[].class);
-    }
-
-    static Builder builder() {
-        return new Builder();
-    }
-
-    class Builder implements io.helidon.common.Builder<Builder, UdpMessage> {
-
-        @Override
-        public UdpMessage build() {
-            return null;        // TODO
-        }
+    @OnMessage
+    public void onMessage(JsonObject recv) {
+        JsonObject sent = processor.process(recv);
+        sender.sendMessage(sent);
+        forward.sendMessage(sent);
     }
 }

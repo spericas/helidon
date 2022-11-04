@@ -16,37 +16,13 @@
 
 package io.helidon.examples.nima.udp;
 
-import java.io.InputStream;
-
+import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.json.JsonObject;
 
-public interface UdpMessage {
+@ApplicationScoped
+public class JsonProcessor {
 
-    UdpClient udpClient();
-
-    <T> T as(Class<T> clazz);
-
-    default JsonObject asJson() {
-        return as(JsonObject.class);
-    }
-
-    default InputStream asInputStream() {
-        return as(InputStream.class);
-    }
-
-    default byte[] asByteArray() {
-        return as(byte[].class);
-    }
-
-    static Builder builder() {
-        return new Builder();
-    }
-
-    class Builder implements io.helidon.common.Builder<Builder, UdpMessage> {
-
-        @Override
-        public UdpMessage build() {
-            return null;        // TODO
-        }
+    JsonObject process(JsonObject json) {
+        return null;        // TODO
     }
 }

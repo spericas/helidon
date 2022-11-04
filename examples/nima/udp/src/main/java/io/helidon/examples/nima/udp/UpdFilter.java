@@ -17,4 +17,6 @@
 package io.helidon.examples.nima.udp;
 
 public interface UpdFilter {
+
+    void filter(UdpFilterContext context);
 }

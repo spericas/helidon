@@ -16,37 +16,9 @@
 
 package io.helidon.examples.nima.udp;
 
-import java.io.InputStream;
+public @interface InetAddressInfo {
 
-import jakarta.json.JsonObject;
+    String host();
 
-public interface UdpMessage {
-
-    UdpClient udpClient();
-
-    <T> T as(Class<T> clazz);
-
-    default JsonObject asJson() {
-        return as(JsonObject.class);
-    }
-
-    default InputStream asInputStream() {
-        return as(InputStream.class);
-    }
-
-    default byte[] asByteArray() {
-        return as(byte[].class);
-    }
-
-    static Builder builder() {
-        return new Builder();
-    }
-
-    class Builder implements io.helidon.common.Builder<Builder, UdpMessage> {
-
-        @Override
-        public UdpMessage build() {
-            return null;        // TODO
-        }
-    }
+    int port();
 }

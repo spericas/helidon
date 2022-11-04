@@ -16,5 +16,51 @@
 
 package io.helidon.examples.nima.udp;
 
+import java.io.InputStream;
+import java.net.InetAddress;
+
 public interface UdpClient {
+
+    InetAddress inetAddress();
+
+    int port();
+
+    void sendMessage(Object msg);
+
+    void sendMessage(byte[] msg);
+
+    void sendMessage(InputStream msg);
+
+    static Builder builder() {
+        return new Builder();
+    }
+
+    class Builder implements io.helidon.common.Builder<Builder, UdpClient> {
+
+        private InetAddress inetAddress;
+        private int port;
+
+        @Override
+        public UdpClient build() {
+            return null;        // TODO
+        }
+
+        public Builder inetAddress(InetAddress inetAddress) {
+            this.inetAddress = inetAddress;
+            return this;
+        }
+
+        public Builder port(int port) {
+            this.port = port;
+            return this;
+        }
+
+        public InetAddress inetAddress() {
+            return inetAddress;
+        }
+
+        public int port() {
+            return port;
+        }
+    }
 }

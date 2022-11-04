@@ -17,4 +17,10 @@
 package io.helidon.examples.nima.udp;
 
 public interface UdpFilterContext {
+
+    void next();
+
+    void next(UdpMessage msg);
+
+    UdpMessage message();
 }

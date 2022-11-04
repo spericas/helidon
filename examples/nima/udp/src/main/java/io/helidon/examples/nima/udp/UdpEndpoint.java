@@ -17,4 +17,10 @@
 package io.helidon.examples.nima.udp;
 
 public interface UdpEndpoint {
+
+    void onMessage(UdpMessage message);
+
+    default void onError(Throwable throwable) {
+        throw new RuntimeException(throwable);
+    }
 }
