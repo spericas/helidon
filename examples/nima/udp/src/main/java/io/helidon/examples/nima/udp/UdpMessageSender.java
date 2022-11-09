@@ -17,34 +17,20 @@
 package io.helidon.examples.nima.udp;
 
 import java.io.IOException;
+import java.io.InputStream;
+import java.util.concurrent.CompletableFuture;
 
-import jakarta.inject.Inject;
-import jakarta.json.JsonObject;
+public interface UdpMessageSender {
 
-/**
- * Example of UDP declarative endpoint.
- */
-@UdpEndpointInfo(port=8433)
-class JsonUdpEndpoint2 {
+    void sendMessage(Object msg) throws IOException;
 
-    @Inject
-    UdpClient sender;
+    void sendMessage(byte[] msg) throws IOException;
 
-    @Inject
-    JsonProcessor processor;
+    void sendMessage(InputStream msg) throws IOException;
 
-    @Inject
-    @InetAddressInfo(host="udp.oracle.com", port=8888)
-    UdpClient forward;
+    CompletableFuture<Void> sendMessageAsync(Object msg);
 
-    @OnMessage
-    public void onMessage(JsonObject recv) {
-        try {
-            JsonObject sent = processor.process(recv);
-            sender.sendMessage(sent);
-            forward.sendMessageAsync(sent);
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        }
-    }
+    CompletableFuture<Void> sendMessageAsync(byte[] msg);
+
+    CompletableFuture<Void> sendMessageAsync(InputStream msg);
 }

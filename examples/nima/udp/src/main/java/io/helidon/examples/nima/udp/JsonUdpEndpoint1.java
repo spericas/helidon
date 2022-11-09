@@ -16,8 +16,8 @@
 
 package io.helidon.examples.nima.udp;
 
+import java.io.IOException;
 import java.net.InetAddress;
-import java.net.UnknownHostException;
 
 import jakarta.json.JsonObject;
 
@@ -44,8 +44,8 @@ class JsonUdpEndpoint1 implements UdpEndpoint {
                     .inetAddress(InetAddress.getByName("udp.oracle.com"))
                     .port(8888)
                     .build();
-            forward.sendMessage(sent);
-        } catch (UnknownHostException e) {
+            forward.sendMessageAsync(sent);
+        } catch (IOException e) {
             throw new RuntimeException(e);
         }
     }
