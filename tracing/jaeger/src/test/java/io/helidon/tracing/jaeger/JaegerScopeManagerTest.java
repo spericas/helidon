@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021 Oracle and/or its affiliates.
+ * Copyright (c) 2021, 2023 Oracle and/or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,12 +21,16 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
 import io.jaegertracing.internal.JaegerTracer;
+import io.opentracing.Scope;
 import io.opentracing.Span;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import static org.hamcrest.CoreMatchers.is;
+import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -57,6 +61,7 @@ class JaegerScopeManagerTest {
         scope.close();
         assertNull(scopeManager.activeSpan());
         assertTrue(scope.isClosed());
+        assertThat(JaegerScopeManager.SCOPES.size(), is(0));
     }
 
     @Test
@@ -69,6 +74,7 @@ class JaegerScopeManagerTest {
         executor.submit(scope::close).get(100, TimeUnit.MILLISECONDS);      // different thread
         assertNull(scopeManager.activeSpan());
         assertTrue(scope.isClosed());
+        assertThat(JaegerScopeManager.SCOPES.size(), is(0));
     }
 
     @Test
@@ -84,5 +90,29 @@ class JaegerScopeManagerTest {
         assertEquals(scopeManager.activeSpan(), span1);
         scope1.close();
         assertNull(scopeManager.activeSpan());
+        assertThat(JaegerScopeManager.SCOPES.size(), is(0));
+    }
+
+    @Test
+    void testScopeManagerStackTry() {
+        JaegerScopeManager scopeManager = (JaegerScopeManager) tracer.scopeManager();
+        assertNull(scopeManager.activeSpan());
+        Span span1 = tracer.buildSpan("test-span1").start();
+        try (Scope scope1 = scopeManager.activate(span1)) {
+            assertNotNull(scope1);
+            assertEquals(scopeManager.activeSpan(), span1);
+            Span span2 = tracer.buildSpan("test-span2").start();
+            try (Scope scope2 = scopeManager.activate(span2)) {
+                assertNotNull(scope2);
+                assertEquals(scopeManager.activeSpan(), span2);
+            } finally {
+                span2.finish();
+            }
+            assertEquals(scopeManager.activeSpan(), span1);
+        } finally {
+            span1.finish();
+        }
+        assertNull(scopeManager.activeSpan());
+        assertThat(JaegerScopeManager.SCOPES.size(), is(0));
     }
 }
