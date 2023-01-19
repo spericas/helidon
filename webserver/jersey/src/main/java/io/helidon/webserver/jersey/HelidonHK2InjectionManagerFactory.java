@@ -18,6 +18,7 @@ package io.helidon.webserver.jersey;
 
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Type;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Set;
@@ -26,6 +27,7 @@ import java.util.logging.Logger;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import io.helidon.common.context.Contexts;
 import jakarta.annotation.Priority;
 import jakarta.inject.Singleton;
 import jakarta.ws.rs.core.Application;
@@ -198,9 +200,48 @@ public class HelidonHK2InjectionManagerFactory extends Hk2InjectionManagerFactor
             List<ServiceHolder<T>> forApplicationList = forApplication.getAllServiceHolders(contractOrImpl, qualifiers);
             forApplicationList.forEach(sh -> LOGGER.finest(() ->
                     "getAllServiceHolders forApplication " + forApplication + " " + sh.getContractTypes().iterator().next()));
-            return forApplicationList.size() == 0 ? sharedList
+            List<ServiceHolder<T>> result =  forApplicationList.size() == 0 ? sharedList
                     : Stream.concat(sharedList.stream(), forApplicationList.stream()).collect(Collectors.toList());
+            List<Class<?>> exclusions = providerExclusions();
+            if (exclusions != null) {
+                return result.stream().filter(
+                        holder -> {
+                            for (Class<?> c : exclusions) {
+                                if (holder.getContractTypes().contains(c)) {
+                                    LOGGER.finest(() -> "Excluding provider " + c + " from shared list");
+                                    return false;
+                                }
+                            }
+                            return true;
+                        }
+                ).collect(Collectors.toList());
+            }
+            return result;
         }
+
+        private List<Class<?>> providerExclusions() {
+            Application app = Contexts.context().flatMap(c -> c.get(Application.class)).orElse(null);
+            if (app != null) {
+                ExcludeProviders excludeProviders = getRealClass(app).getAnnotation(ExcludeProviders.class);
+                return excludeProviders == null ? null : Arrays.asList(excludeProviders.value());
+            }
+            return null;
+        }
+
+        /**
+         * Returns the real class of this object, skipping proxies.
+         *
+         * @param object The object.
+         * @return Its class.
+         */
+        private static Class<?> getRealClass(Object object) {
+            Class<?> result = object.getClass();
+            while (result.isSynthetic()) {
+                result = result.getSuperclass();
+            }
+            return result;
+        }
+
 
         @Override
         public <T> T getInstance(Class<T> contractOrImpl, Annotation... qualifiers) {
