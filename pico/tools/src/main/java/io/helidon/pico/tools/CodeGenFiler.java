@@ -46,6 +46,7 @@ import javax.tools.FileObject;
 import javax.tools.JavaFileObject;
 import javax.tools.StandardLocation;
 
+import io.helidon.build.common.Strings;
 import io.helidon.common.types.TypeName;
 import io.helidon.common.types.TypeNameDefault;
 import io.helidon.pico.api.PicoServicesConfig;
@@ -157,6 +158,7 @@ public class CodeGenFiler {
             mergedMap.put(contract, mergedSet);
             String outPath = new File(paths.metaInfServicesPath()
                                               .orElse(CodeGenPaths.DEFAULT_META_INF_SERVICES_PATH), contract).getPath();
+            outPath = Strings.normalizePath(outPath);
             try {
                 messager.debug("Reading " + outPath);
                 FileObject f = filer.getResource(StandardLocation.CLASS_OUTPUT, "", outPath);
@@ -256,6 +258,7 @@ public class CodeGenFiler {
     private Optional<Path> codegenResourceFilerOut(String outPath,
                                                    String body,
                                                    Optional<Function<InputStream, String>> optFnUpdater) {
+        outPath = Strings.normalizePath(outPath);
         Messager messager = messager();
         if (!filerWriterEnabled()) {
             messager.log("(disabled) Writing " + outPath + " with:\n" + body);

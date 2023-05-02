@@ -35,6 +35,7 @@ import javax.tools.Diagnostic;
 import javax.tools.FileObject;
 import javax.tools.StandardLocation;
 
+import io.helidon.build.common.Strings;
 import io.helidon.builder.processor.spi.TypeInfoCreatorProvider;
 import io.helidon.common.HelidonServiceLoader;
 import io.helidon.common.types.TypeInfo;
@@ -157,9 +158,11 @@ final class ActiveProcessorUtils implements Messager {
         AtomicReference<File> srcPath = new AtomicReference<>();
         ModuleInfoDescriptor thisModuleDescriptor = thisModuleDescriptor(typeSuffix, moduleInfoFile, srcPath).orElse(null);
         if (thisModuleDescriptor != null) {
+            logger.log(System.Logger.Level.INFO, "Module Name 1 : " + thisModuleDescriptor.name());
             servicesToProcess.lastKnownModuleInfoDescriptor(thisModuleDescriptor);
         } else {
             String thisModuleName = Options.getOption(Options.TAG_MODULE_NAME).orElse(null);
+            logger.log(System.Logger.Level.INFO, "Module Name 2 : " + thisModuleName);
             if (thisModuleName == null) {
                 servicesToProcess.clearModuleName();
             } else {
@@ -173,6 +176,7 @@ final class ActiveProcessorUtils implements Messager {
             servicesToProcess.lastKnownSourcePathBeingProcessed(srcPath.get().toPath());
         }
         if (moduleInfoFile.get() != null) {
+            logger.log(System.Logger.Level.INFO, "Module Name 3 : " + moduleInfoFile.get().getName());
             servicesToProcess.lastKnownModuleInfoFilePath(moduleInfoFile.get().toPath());
         }
     }
@@ -207,14 +211,15 @@ final class ActiveProcessorUtils implements Messager {
     private Optional<ModuleInfoDescriptor> tryFindModuleInfoTheUnconventionalWayFromSourceMain(
             AtomicReference<File> moduleInfoFile,
             AtomicReference<File> srcPath) {
-        if (srcPath != null && srcPath.get() != null && srcPath.get().getPath().contains(TARGET_DIR)) {
-            String path = srcPath.get().getPath();
+        if (srcPath != null && srcPath.get() != null && Strings.normalizePath(srcPath.get().getPath()).contains(TARGET_DIR)) {
+            String path = Strings.normalizePath(srcPath.get().getPath());
             int pos = path.indexOf(TARGET_DIR);
             path = path.substring(0, pos);
             File srcRoot = new File(path, SRC_MAIN_JAVA_DIR);
             File file = new File(srcRoot, REAL_MODULE_INFO_JAVA_NAME);
             if (file.exists()) {
                 try {
+                    logger.log(System.Logger.Level.INFO, "Source Main : " + file.toPath());
                     return Optional.of(
                             ModuleInfoDescriptor.create(file.toPath(), ModuleInfoDescriptor.Ordering.NATURAL_PRESERVE_COMMENTS));
                 } catch (Exception e) {
@@ -226,7 +231,7 @@ final class ActiveProcessorUtils implements Messager {
                 }
             }
         }
-
+        logger.log(System.Logger.Level.INFO, "Source Main : unable to find module-info.java");
         debug("unable to find module-info.java from: " + srcPath);
         return Optional.empty();
     }
@@ -240,6 +245,7 @@ final class ActiveProcessorUtils implements Messager {
         try {
             FileObject f = filer.getResource(location, "", REAL_MODULE_INFO_JAVA_NAME);
             URI uri = f.toUri();
+            logger.log(System.Logger.Level.INFO, "Convenient way uri : " + uri);
             Path filePath = toPath(uri).orElse(null);
             if (filePath != null) {
                 Path parent = filePath.getParent();
@@ -254,6 +260,7 @@ final class ActiveProcessorUtils implements Messager {
                     if (moduleInfoFile != null) {
                         moduleInfoFile.set(filePath.toFile());
                     }
+                    logger.log(System.Logger.Level.INFO, "Convenient way : " + filePath);
                     return Optional.of(ModuleInfoDescriptor.create(filePath));
                 }
             }

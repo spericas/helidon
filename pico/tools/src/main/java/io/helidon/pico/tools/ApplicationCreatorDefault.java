@@ -452,7 +452,6 @@ public class ApplicationCreatorDefault extends AbstractCreator implements Applic
             if (moduleName == null || ModuleInfoDescriptor.DEFAULT_MODULE_NAME.equals(moduleName)) {
                 moduleName = descriptor.name();
             }
-
             TypeName moduleTypeName = moduleServiceTypeOf(picoServices, moduleName).orElse(null);
             if (moduleTypeName != null) {
                 String typePrefix = req.codeGen().classPrefixName();

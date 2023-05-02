@@ -22,6 +22,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
+import io.helidon.build.common.Strings;
 import org.junit.jupiter.api.Test;
 
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -77,7 +78,7 @@ class TemplateHelperTest {
                    containsInAnyOrder("description", "hasdescription", "header", "generatedanno", "precomments", "items", "name"));
 
         String codegen = helper.applySubstitutions(template, subst, true).trim();
-        assertThat(codegen,
+        assertThat(Strings.normalizeNewLines(codegen),
                    equalTo("module  { \n"
                                    + "}"));
 
@@ -87,7 +88,7 @@ class TemplateHelperTest {
         subst.put("header", "/*\n  Header Line 1\n  Header Line 2\n */\n");
         subst.put("generatedanno", helper.generatedStickerFor("generator"));
         codegen = helper.applySubstitutions(template, subst, true);
-        assertThat(codegen,
+        assertThat(Strings.normalizeNewLines(codegen),
                    equalTo("/*\n"
                                    + "  Header Line 1\n"
                                    + "  Header Line 2\n"

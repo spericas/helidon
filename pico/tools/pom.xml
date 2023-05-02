@@ -53,6 +53,11 @@
             <artifactId>helidon-common</artifactId>
         </dependency>
         <dependency>
+            <groupId>io.helidon.build-tools.common</groupId>
+            <artifactId>helidon-build-common</artifactId>
+            <version>3.0.4</version>
+        </dependency>
+        <dependency>
             <groupId>io.helidon.config</groupId>
             <artifactId>helidon-config-metadata</artifactId>
             <scope>provided</scope>

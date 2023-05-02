@@ -19,6 +19,7 @@ package io.helidon.pico.processor;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 
+import io.helidon.build.common.Strings;
 import io.helidon.pico.tools.ToolsException;
 
 /**
@@ -38,7 +39,7 @@ class TestUtils {
     static String loadStringFromResource(String resourceNamePath) {
         try {
             try (InputStream in = TestUtils.class.getClassLoader().getResourceAsStream(resourceNamePath)) {
-                return new String(in.readAllBytes(), StandardCharsets.UTF_8);
+                return Strings.normalizeNewLines(new String(in.readAllBytes(), StandardCharsets.UTF_8));
             }
         } catch (Exception e) {
             throw new ToolsException("Failed to load: " + resourceNamePath, e);

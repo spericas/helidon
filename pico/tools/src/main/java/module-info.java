@@ -41,6 +41,7 @@ module io.helidon.pico.tools {
     requires transitive io.helidon.common.types;
     requires transitive io.helidon.pico.runtime;
     requires transitive io.helidon.builder.processor.tools;
+    requires io.helidon.build.common;
 
     exports io.helidon.pico.tools;
     exports io.helidon.pico.tools.spi;

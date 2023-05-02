@@ -46,6 +46,7 @@
                     <includes>
                         <include>**/*TckTest.java</include>
                     </includes>
+                    <argLine>-Xmx1024m -XX:MaxPermSize=256m</argLine>
                 </configuration>
                 <dependencies>
                     <dependency>

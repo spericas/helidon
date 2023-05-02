@@ -34,6 +34,7 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import javax.lang.model.element.TypeElement;
 
+import io.helidon.build.common.Strings;
 import io.helidon.common.types.TypeName;
 import io.helidon.common.types.TypeNameDefault;
 import io.helidon.pico.api.Application;
@@ -278,6 +279,7 @@ public class ModuleUtils {
         // create a relative path from the two paths
         URI relativePath = basePath.toUri().relativize(sourcePath.toUri());
         String path = relativePath.getPath();
+        path = Strings.normalizePath(path);
         if (!path.startsWith("/")) {
             path = "/" + path;
         }
@@ -313,6 +315,7 @@ public class ModuleUtils {
      * @return the base path
      */
     public static Path toBasePath(String sourcePath) {
+        sourcePath = Strings.normalizePath(sourcePath);
         int pos = sourcePath.lastIndexOf(SRC_MAIN_JAVA_DIR);
         if (pos < 0) {
             pos = sourcePath.lastIndexOf(SRC_TEST_JAVA_DIR);
@@ -339,6 +342,7 @@ public class ModuleUtils {
     private static Set<Path> findFile(Path startPath,
                                       Path untilPath,
                                       String fileToFind) {
+        fileToFind = Strings.normalizePath(fileToFind);
         if (startPath == null || !startPath.toString().contains(untilPath.toString())) {
             return Set.of();
         }
@@ -360,6 +364,7 @@ public class ModuleUtils {
     private static Set<Path> findFile(Path target,
                                       String fileToFind) {
         Set<Path> result = new LinkedHashSet<>();
+        fileToFind = Strings.normalizePath(fileToFind);
 
         Stack<Path> searchStack = new Stack<>();
         searchStack.add(target);

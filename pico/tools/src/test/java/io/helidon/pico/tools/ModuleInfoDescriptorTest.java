@@ -19,6 +19,7 @@ package io.helidon.pico.tools;
 import java.io.File;
 import java.util.List;
 
+import io.helidon.build.common.Strings;
 import io.helidon.pico.api.Contract;
 import io.helidon.pico.api.ExternalContracts;
 

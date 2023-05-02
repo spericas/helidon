@@ -16,6 +16,7 @@
 
 package io.helidon.demo.todos.frontend;
 
+import java.time.Duration;
 import java.util.Base64;
 import java.util.List;
 import java.util.Properties;
@@ -165,7 +166,7 @@ public class FrontendTest {
                 .addMediaSupport(JsonpSupport.create())
                 .build();
 
-        serverFrontend.start();
+        serverFrontend.start().await(Duration.ofSeconds(5));
     }
 
     private static Routing createRouting(Security security, Config config, BackendServiceClient bsc) {

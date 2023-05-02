@@ -44,6 +44,7 @@ import javax.tools.JavaFileManager;
 import javax.tools.JavaFileObject;
 import javax.tools.StandardLocation;
 
+import io.helidon.build.common.Strings;
 import io.helidon.common.types.TypeName;
 import io.helidon.common.types.TypeNameDefault;
 
@@ -273,7 +274,7 @@ public abstract class AbstractFilerMessager implements Filer, Messager {
                 LOGGER.log(System.Logger.Level.DEBUG, "sourcepath is not defined in " + paths);
                 return null;
             }
-
+            sourcePath = Strings.normalizePath(sourcePath);
             return new File(sourcePath, TypeTools.toFilePath(typeName)).toPath();
         }
     }

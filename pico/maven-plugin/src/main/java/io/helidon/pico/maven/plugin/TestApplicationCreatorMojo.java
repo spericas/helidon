@@ -23,6 +23,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 
+import io.helidon.build.common.Strings;
 import io.helidon.common.types.TypeName;
 import io.helidon.pico.api.PicoServices;
 import io.helidon.pico.api.PicoServicesConfig;
@@ -95,8 +96,10 @@ public class TestApplicationCreatorMojo extends AbstractApplicationCreatorMojo {
     @Override
     LinkedHashSet<Path> getClasspathElements() {
         MavenProject project = getProject();
+        String testOutputDirectory = project.getBuild().getTestOutputDirectory();
+        testOutputDirectory = Strings.normalizePath(testOutputDirectory);
         LinkedHashSet<Path> result = new LinkedHashSet<>(project.getTestArtifacts().size());
-        result.add(new File(project.getBuild().getTestOutputDirectory()).toPath());
+        result.add(new File(testOutputDirectory).toPath());
         for (Object a : project.getTestArtifacts()) {
             result.add(((Artifact) a).getFile().toPath());
         }
@@ -112,8 +115,10 @@ public class TestApplicationCreatorMojo extends AbstractApplicationCreatorMojo {
     @Override
     String getThisModuleName() {
         Build build = getProject().getBuild();
-        Path basePath = toBasePath(build.getTestSourceDirectory());
-        String moduleName = toSuggestedModuleName(basePath, Path.of(build.getTestOutputDirectory()), true).orElseThrow();
+        String testOutputDirectory = Strings.normalizePath(build.getTestOutputDirectory());
+        String testSourceDirectory = Strings.normalizePath(build.getTestSourceDirectory());
+        Path basePath = toBasePath(testSourceDirectory);
+        String moduleName = toSuggestedModuleName(basePath, Path.of(testOutputDirectory), true).orElseThrow();
         return moduleName;
     }
 

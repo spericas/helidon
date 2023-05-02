@@ -215,7 +215,6 @@ public class ActivatorCreatorDefault extends AbstractCreator implements Activato
         String className = moduleTypeName.className();
         String packageName = moduleTypeName.packageName();
         String moduleName = req.moduleName().orElse(null);
-
         ActivatorCreatorCodeGen codeGen = req.codeGen();
         String typePrefix = codeGen.classPrefixName();
         Collection<String> modulesRequired = codeGen.modulesRequired();

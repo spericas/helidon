@@ -30,6 +30,8 @@ import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+import io.helidon.build.common.Strings;
+
 /**
  * General utils.
  */
@@ -48,7 +50,7 @@ final class CommonUtils {
     static String loadStringFromResource(String resourceNamePath) {
         try {
             try (InputStream in = CommonUtils.class.getClassLoader().getResourceAsStream(resourceNamePath)) {
-                return new String(in.readAllBytes(), StandardCharsets.UTF_8);
+                return Strings.normalizeNewLines(new String(in.readAllBytes(), StandardCharsets.UTF_8));
             }
         } catch (Exception e) {
             throw new ToolsException("Failed to load: " + resourceNamePath, e);
@@ -66,7 +68,7 @@ final class CommonUtils {
         try {
             Path filePath = Path.of(fileName);
             String content = Files.readString(filePath);
-            return content;
+            return Strings.normalizeNewLines(content);
         } catch (IOException e) {
             throw new ToolsException("Unable to load from file: " + fileName, e);
         }
@@ -171,7 +173,7 @@ final class CommonUtils {
         } catch (IOException e) {
             throw new ToolsException("failed to read", e);
         }
-        return builder.toString().trim();
+        return Strings.normalizeNewLines(builder.toString().trim());
     }
 
     /**

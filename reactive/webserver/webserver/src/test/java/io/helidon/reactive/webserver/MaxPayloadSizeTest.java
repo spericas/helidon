@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, 2022 Oracle and/or its affiliates.
+ * Copyright (c) 2020, 2023 Oracle and/or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,6 +17,7 @@
 package io.helidon.reactive.webserver;
 
 import java.nio.charset.Charset;
+import java.time.Duration;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.Flow;
 import java.util.concurrent.TimeUnit;
@@ -126,6 +127,7 @@ public class MaxPayloadSizeTest {
         builder.headers().add("Content-Length", "512");        // over max
         WebClientResponse response = builder.path("/maxpayload")
                 .contentType(MediaTypes.APPLICATION_OCTET_STREAM)
+                .connectTimeout(Duration.ofSeconds(5))
                 .request()
                 .await(5, TimeUnit.SECONDS);
         assertThat(response.status().code(), is(Http.Status.REQUEST_ENTITY_TOO_LARGE_413.code()));
@@ -140,7 +142,7 @@ public class MaxPayloadSizeTest {
         WebClientResponse response = builder.path("/maxpayload")
                 .contentType(MediaTypes.APPLICATION_OCTET_STREAM)
                 .submit(PAYLOAD)
-                .await(5, TimeUnit.SECONDS);
+                .await(100, TimeUnit.SECONDS);
         assertThat(response.status().code(), is(Http.Status.REQUEST_ENTITY_TOO_LARGE_413.code()));
     }
 

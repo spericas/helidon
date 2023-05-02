@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022 Oracle and/or its affiliates.
+ * Copyright (c) 2022, 2023 Oracle and/or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -125,7 +125,10 @@ public class KeepAliveTest {
             }
             res.content().forEach(DataChunk::release);
         } catch (CompletionException e) {
-            if (ignoreConnectionClose && e.getMessage().contains("Connection reset")) {
+            String message = e.getMessage();
+            if (ignoreConnectionClose
+                    && (message.contains("Connection reset")
+                    || message.contains("An established connection was aborted by the software in your host machine"))) {
                 // this is an expected (intermittent) result - due to a natural race (between us writing the request
                 // data and server responding), we may either get a response
                 // or the socket may be closed for writing (the reset comes from an attempt to write entity to a closed

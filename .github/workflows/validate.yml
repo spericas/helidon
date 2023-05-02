@@ -1,7 +1,3 @@
-# Notes
-# - cannot run on Windows, as we use shell scripts
-# - removed macos-latest from most jobs to speed up the process
-
 name: "Validate"
 
 on: [pull_request, push]
@@ -72,10 +68,13 @@ jobs:
       - name: Docs
         run: etc/scripts/site.sh
   build:
-    timeout-minutes: 60
+    timeout-minutes: 100
     strategy:
       matrix:
-        os: [ ubuntu-20.04 ]
+        os: [ windows-2022 ]
+        include:
+          - os: windows-2022
+            build_script: etc/scripts/github-build.bat
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v3
@@ -85,13 +84,24 @@ jobs:
           distribution: ${{ env.JAVA_DISTRO }}
           java-version: ${{ env.JAVA_VERSION }}
           cache: maven
+      - name: Maven compile
+        run: etc/scripts/github-compile.bat
       - name: Maven build
-        run: etc/scripts/github-build.sh
+        run: ${{ matrix.build_script }}
+      - name: Archive test results
+        uses: actions/upload-artifact@v3.1.2
+        if: always()
+        with:
+         name: test-results
+         path: |
+           **/target/**/*.java
+           **/target/**/*.java.pico
+           **/target/pico/*.txt
   examples:
     timeout-minutes: 30
     strategy:
       matrix:
-        os: [ ubuntu-20.04, macos-latest ]
+        os: [ ubuntu-20.04, windows-2022 ]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v3
@@ -103,7 +113,7 @@ jobs:
           cache: maven
       - name: Maven build
         run: |
-          mvn -B -e "-Dmaven.test.skip=true" $MAVEN_HTTP_ARGS -DskipTests -Ppipeline install 
+          mvn -B -e "-Dmaven.test.skip=true" $MAVEN_HTTP_ARGS -DskipTests -Ppipeline install
           cd examples
           mvn -B verify
   mp-tck:
@@ -111,7 +121,12 @@ jobs:
     name: "MicroProfile TCKs"
     strategy:
       matrix:
-        os: [ ubuntu-20.04 ]
+        os: [ ubuntu-20.04, windows-2022 ]
+        include:
+          - os: ubuntu-20.04
+            mp-tck: etc/scripts/mp-tck.sh
+          - os: windows-2022
+            mp-tck: etc/scripts/mp-tck.bat
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v3
@@ -122,12 +137,17 @@ jobs:
           java-version: ${{ env.JAVA_VERSION }}
           cache: maven
       - name: Maven build
-        run: etc/scripts/mp-tck.sh
+        run: ${{ matrix.mp-tck }}
   archetypes:
     timeout-minutes: 45
     strategy:
       matrix:
-        os: [ ubuntu-20.04 ]
+        os: [ ubuntu-20.04, windows-2022 ]
+        include:
+          - os: ubuntu-20.04
+            test-archetypes: etc/scripts/test-archetypes.sh
+          - os: windows-2022
+            test-archetypes: etc/scripts/test-archetypes.bat
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v3
@@ -137,13 +157,13 @@ jobs:
           distribution: ${{ env.JAVA_DISTRO }}
           java-version: ${{ env.JAVA_VERSION }}
           cache: maven
-      - name: Test archetypes
-        run: etc/scripts/test-archetypes.sh
+      - name: Test Archetypes
+        run: ${{ matrix.test-archetypes }}
   packaging:
     timeout-minutes: 30
     strategy:
       matrix:
-        os: [ ubuntu-20.04, macos-latest]
+        os: [ ubuntu-20.04 ]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v3

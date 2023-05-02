@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022 Oracle and/or its affiliates.
+ * Copyright (c) 2022, 2023 Oracle and/or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,6 +16,7 @@
 
 package io.helidon.builder.test;
 
+import io.helidon.build.common.Strings;
 import io.helidon.builder.test.testsubjects.CustomNamed;
 import io.helidon.builder.test.testsubjects.impl.DefaultCustomNamed;
 
@@ -47,7 +48,7 @@ class CustomNamedTest {
                 .configure(MapperFeature.SORT_PROPERTIES_ALPHABETICALLY, true);
         DefaultPrettyPrinter printer = new DefaultPrettyPrinter();
         String json = mapper.writer(printer).writeValueAsString(customNamed);
-        assertThat(json, equalTo("{\n"
+        assertThat(Strings.normalizeNewLines(json), equalTo("{\n"
                              + "  \"stringSet\" : [ \"a\", \"b\", \"y\" ]\n"
                              + "}"));
     }

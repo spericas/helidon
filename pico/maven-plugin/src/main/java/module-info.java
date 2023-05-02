@@ -26,6 +26,7 @@ module io.helidon.pico.maven.plugin {
     requires io.helidon.builder.config;
     requires io.helidon.common;
     requires io.helidon.config;
+    requires io.helidon.build.common;
     requires transitive io.helidon.pico.tools;
 
     exports io.helidon.pico.maven.plugin;

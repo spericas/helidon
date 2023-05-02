@@ -31,6 +31,7 @@ import java.util.TreeSet;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
+import io.helidon.build.common.Strings;
 import io.helidon.common.types.TypeName;
 import io.helidon.common.types.TypeNameDefault;
 import io.helidon.pico.api.CallingContext;
@@ -128,8 +129,9 @@ public abstract class AbstractApplicationCreatorMojo extends AbstractCreatorMojo
 
     String getThisModuleName() {
         Build build = getProject().getBuild();
+        String sourceDirectory = Strings.normalizePath(build.getSourceDirectory());
         Path basePath = toBasePath(build.getSourceDirectory());
-        String moduleName = toSuggestedModuleName(basePath, Path.of(build.getSourceDirectory()), true).orElseThrow();
+        String moduleName = toSuggestedModuleName(basePath, Path.of(sourceDirectory), true).orElseThrow();
         if (isUnnamedModuleName(moduleName)) {
             // try to recover it from a previous tooling step
             String appPackageName = loadAppPackageName().orElse(null);
@@ -296,12 +298,16 @@ public abstract class AbstractApplicationCreatorMojo extends AbstractCreatorMojo
                     ? moduleInfoPathRef.get().getPath()
                     : null;
             String moduleInfoModuleName = getThisModuleName();
+            moduleInfoModuleName = Strings.normalizePath(moduleInfoModuleName);
             Optional<ServiceProvider<ModuleComponent>> moduleSp = lookupThisModule(moduleInfoModuleName, services, false);
             String packageName = determinePackageName(moduleSp, serviceTypeNames, descriptor, true);
+            String generatedSourceDirectory = Strings.normalizePath(getGeneratedSourceDirectory().getPath());
+            String generatedOutputDirectory = Strings.normalizePath(getOutputDirectory().getPath());
+            moduleInfoPath = Strings.normalizePath(moduleInfoPath);
 
             CodeGenPaths codeGenPaths = CodeGenPathsDefault.builder()
-                    .generatedSourcesPath(getGeneratedSourceDirectory().getPath())
-                    .outputPath(getOutputDirectory().getPath())
+                    .generatedSourcesPath(generatedSourceDirectory)
+                    .outputPath(generatedOutputDirectory)
                     .moduleInfoPath(ofNullable(moduleInfoPath))
                     .build();
             ApplicationCreatorCodeGen applicationCodeGen = ApplicationCreatorCodeGenDefault.builder()
@@ -343,6 +349,7 @@ public abstract class AbstractApplicationCreatorMojo extends AbstractCreatorMojo
                 reqBuilder.moduleName(moduleInfoModuleName);
             }
             ApplicationCreatorRequest req = reqBuilder.build();
+            getLog().info("Module name from app request : " + req.moduleName());
             ApplicationCreatorResponse res = creator.createApplication(req);
             if (res.success()) {
                 getLog().debug("processed service type names: " + res.serviceTypeNames());
