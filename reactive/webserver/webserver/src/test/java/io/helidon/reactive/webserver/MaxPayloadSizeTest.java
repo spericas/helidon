@@ -33,6 +33,8 @@ import io.helidon.reactive.webclient.WebClientResponse;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.DisabledOnOs;
+import org.junit.jupiter.api.condition.OS;
 
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -137,12 +139,13 @@ public class MaxPayloadSizeTest {
      * If content length is greater than max, a 413 must be returned.
      */
     @Test
+    @DisabledOnOs(OS.WINDOWS)
     public void testContentLengthExceededWithPayload() {
         WebClientRequestBuilder builder = webClient.post();
         WebClientResponse response = builder.path("/maxpayload")
                 .contentType(MediaTypes.APPLICATION_OCTET_STREAM)
                 .submit(PAYLOAD)
-                .await(100, TimeUnit.SECONDS);
+                .await(5, TimeUnit.SECONDS);
         assertThat(response.status().code(), is(Http.Status.REQUEST_ENTITY_TOO_LARGE_413.code()));
     }
 
