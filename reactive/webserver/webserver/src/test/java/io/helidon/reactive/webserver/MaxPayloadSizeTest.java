@@ -16,6 +16,7 @@
 
 package io.helidon.reactive.webserver;
 
+import java.io.IOException;
 import java.nio.charset.Charset;
 import java.time.Duration;
 import java.util.concurrent.CompletionException;
@@ -29,13 +30,11 @@ import io.helidon.common.media.type.MediaTypes;
 import io.helidon.reactive.webclient.WebClient;
 import io.helidon.reactive.webclient.WebClientRequestBuilder;
 import io.helidon.reactive.webclient.WebClientResponse;
-
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.condition.DisabledOnOs;
-import org.junit.jupiter.api.condition.OS;
 
+import static org.hamcrest.CoreMatchers.instanceOf;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -139,14 +138,20 @@ public class MaxPayloadSizeTest {
      * If content length is greater than max, a 413 must be returned.
      */
     @Test
-    @DisabledOnOs(OS.WINDOWS)
+    // @DisabledOnOs(OS.WINDOWS)
     public void testContentLengthExceededWithPayload() {
-        WebClientRequestBuilder builder = webClient.post();
-        WebClientResponse response = builder.path("/maxpayload")
-                .contentType(MediaTypes.APPLICATION_OCTET_STREAM)
-                .submit(PAYLOAD)
-                .await(5, TimeUnit.SECONDS);
-        assertThat(response.status().code(), is(Http.Status.REQUEST_ENTITY_TOO_LARGE_413.code()));
+        try {
+            WebClientRequestBuilder builder = webClient.post();
+            WebClientResponse response = builder.path("/maxpayload")
+                    .contentType(MediaTypes.APPLICATION_OCTET_STREAM)
+                    .submit(PAYLOAD)
+                    .await(5, TimeUnit.SECONDS);
+            assertThat(response.status().code(), is(Http.Status.REQUEST_ENTITY_TOO_LARGE_413.code()));
+        } catch (CompletionException e) {
+            // On Win it may throw an IOException
+            LOGGER.info("IOException thrown when max payload exceeded");
+            assertThat(e.getCause(), is(instanceOf(IOException.class)));
+        }
     }
 
     /**
