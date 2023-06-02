@@ -138,7 +138,6 @@ public class MaxPayloadSizeTest {
      * If content length is greater than max, a 413 must be returned.
      */
     @Test
-    // @DisabledOnOs(OS.WINDOWS)
     public void testContentLengthExceededWithPayload() {
         try {
             WebClientRequestBuilder builder = webClient.post();
