@@ -16,6 +16,8 @@
 
 package io.helidon.jersey.connector;
 
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.net.URI;
 import java.time.Duration;
 import java.util.Map;
@@ -40,6 +42,7 @@ import io.helidon.nima.webclient.http1.Http1Client;
 import io.helidon.nima.webclient.http1.Http1ClientRequest;
 import io.helidon.nima.webclient.http1.Http1ClientResponse;
 
+import jakarta.ws.rs.ProcessingException;
 import jakarta.ws.rs.client.Client;
 import jakarta.ws.rs.core.Configuration;
 import jakarta.ws.rs.core.Response;
@@ -185,10 +188,19 @@ class HelidonConnector implements Connector {
         Http1ClientRequest httpRequest = mapRequest(request);
 
         if (request.hasEntity()) {
-            httpResponse = httpRequest.outputStream(os -> {
-                request.setStreamProvider(length -> os);
-                request.writeEntity();      // ask Jersey to write entity to WebClient stream
-            });
+            if (httpRequest.followRedirects()) {
+                ByteArrayOutputStream baos = new ByteArrayOutputStream(8 * 1024);       // TODO config
+                request.setStreamProvider(contentLength -> baos);
+                ((ProcessingRunnable) request::writeEntity).run();
+                httpResponse = httpRequest.submit(baos.toByteArray());
+            } else {
+                // optimization that writes directly to the output stream but does
+                // not currently work with redirects in WebClient
+                httpResponse = httpRequest.outputStream(os -> {
+                    request.setStreamProvider(length -> os);
+                    request.writeEntity();
+                });
+            }
         } else {
             httpResponse = httpRequest.request();
         }
@@ -242,4 +254,17 @@ class HelidonConnector implements Connector {
         return Optional.empty();
     }
 
+    @FunctionalInterface
+    private interface ProcessingRunnable extends Runnable {
+        void runOrThrow() throws IOException;
+
+        @Override
+        default void run() {
+            try {
+                runOrThrow();
+            } catch (IOException e) {
+                throw new ProcessingException("Error writing entity:", e);
+            }
+        }
+    }
 }
