@@ -37,6 +37,7 @@ module io.helidon.webserver {
     requires java.logging;
     requires io.netty.handler;
     requires io.netty.codec.http;
+    requires io.netty.codec.haproxy;
     requires io.netty.codec;
     requires io.netty.transport;
     requires io.netty.common;

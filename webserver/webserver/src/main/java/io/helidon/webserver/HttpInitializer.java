@@ -16,6 +16,8 @@
 
 package io.helidon.webserver;
 
+import javax.net.ssl.SSLEngine;
+import javax.net.ssl.SSLPeerUnverifiedException;
 import java.lang.ref.Reference;
 import java.lang.ref.ReferenceQueue;
 import java.security.Principal;
@@ -27,15 +29,12 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
-import javax.net.ssl.SSLEngine;
-import javax.net.ssl.SSLPeerUnverifiedException;
-
 import io.helidon.webserver.ReferenceHoldingQueue.IndirectReference;
-
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelInitializer;
 import io.netty.channel.ChannelPipeline;
 import io.netty.channel.socket.SocketChannel;
+import io.netty.handler.codec.haproxy.HAProxyMessageDecoder;
 import io.netty.handler.codec.http.HttpContentCompressor;
 import io.netty.handler.codec.http.HttpServerCodec;
 import io.netty.handler.logging.LogLevel;
@@ -160,11 +159,15 @@ class HttpInitializer extends ChannelInitializer<SocketChannel> {
             sslHandler.handshakeFuture().addListener(future -> obtainClientCN(future, ch, sslHandler));
         }
 
+        if (soConfig.enableProxyProtocol()) {
+            p.addLast(new HAProxyMessageDecoder());
+            p.addLast(new ProxyProtocolHandler());
+        }
+
         if (LOGGER.isLoggable(Level.FINE)) {
             p.addLast(new LoggingHandler(LogLevel.DEBUG));
         }
 
-        ServerConfiguration serverConfig = webServer.configuration();
         HttpServerCodec sourceCodec = new HttpServerCodec(
                 soConfig.maxInitialLineLength(),
                 soConfig.maxHeaderSize(),
@@ -172,10 +175,10 @@ class HttpInitializer extends ChannelInitializer<SocketChannel> {
                 soConfig.validateHeaders(),
                 soConfig.initialBufferSize()
         );
-
         UpgradeManager.addUpgradeHandler(p, router, sourceCodec, soConfig.maxUpgradeContentLength());
 
         // Enable compression via "Accept-Encoding" header if configured
+        ServerConfiguration serverConfig = webServer.configuration();
         if (serverConfig.enableCompression()) {
             log("Compression negotiation enabled (gzip, deflate)", ch);
             p.addLast(new HttpContentCompressor());

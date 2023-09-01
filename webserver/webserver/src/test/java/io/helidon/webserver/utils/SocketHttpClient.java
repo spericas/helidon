@@ -66,7 +66,7 @@ public class SocketHttpClient implements AutoCloseable {
      */
     public SocketHttpClient(WebServer webServer) throws IOException {
         socket = new Socket("localhost", webServer.port());
-        socket.setSoTimeout(10000);
+        socket.setSoTimeout(100000);
         socketReader = new BufferedReader(new InputStreamReader(socket.getInputStream(), StandardCharsets.UTF_8));
     }
 
@@ -78,7 +78,7 @@ public class SocketHttpClient implements AutoCloseable {
      */
     public SocketHttpClient(int port) throws IOException {
         socket = new Socket("localhost", port);
-        socket.setSoTimeout(10000);
+        socket.setSoTimeout(100000);
         socketReader = new BufferedReader(new InputStreamReader(socket.getInputStream(), StandardCharsets.UTF_8));
     }
 
@@ -93,7 +93,7 @@ public class SocketHttpClient implements AutoCloseable {
      * @throws Exception in case of an error
      */
     public static String sendAndReceive(Http.Method method, String payload, WebServer webServer) throws Exception {
-        return sendAndReceive("/", method, payload, webServer);
+        return sendAndReceive(null, "/", method, payload, Collections.emptyList(), webServer);
     }
 
     /**
@@ -109,7 +109,39 @@ public class SocketHttpClient implements AutoCloseable {
      */
     public static String sendAndReceive(String path, Http.RequestMethod method, String payload, WebServer webServer)
             throws Exception {
-        return sendAndReceive(path, method, payload, Collections.emptyList(), webServer);
+        return sendAndReceive(null, path, method, payload, Collections.emptyList(), webServer);
+    }
+
+    /**
+     * A helper method that sends the given payload at the given path with the provided method and headers to the webserver.
+     *
+     * @param path      the path to access
+     * @param method    the http method
+     * @param payload   the payload to send (must be without the newlines;
+     *                  otherwise it's not a valid payload)
+     * @param webServer the webserver where to send the payload
+     * @return the exact string returned by webserver (including {@code HTTP/1.1 200 OK} line for instance)
+     * @throws Exception in case of an error
+     */
+    public static String sendAndReceive(String proxyHeader, String path, Http.RequestMethod method, String payload,
+                                        WebServer webServer) throws Exception {
+        return sendAndReceive(proxyHeader, path, method, payload, Collections.emptyList(), webServer);
+    }
+
+    /**
+     * A helper method that sends the given payload at the given path with the provided method and headers to the webserver.
+     *
+     * @param path      the path to access
+     * @param method    the http method
+     * @param payload   the payload to send (must be without the newlines;
+     *                  otherwise it's not a valid payload)
+     * @param webServer the webserver where to send the payload
+     * @return the exact string returned by webserver (including {@code HTTP/1.1 200 OK} line for instance)
+     * @throws Exception in case of an error
+     */
+    public static String sendAndReceive(String path, Http.RequestMethod method, String payload,
+                                        Iterable<String> headers, WebServer webServer) throws Exception {
+        return sendAndReceive(null, path, method, payload, headers, webServer);
     }
 
     /**
@@ -124,13 +156,14 @@ public class SocketHttpClient implements AutoCloseable {
      * @return the exact string returned by webserver (including {@code HTTP/1.1 200 OK} line for instance)
      * @throws Exception in case of an error
      */
-    public static String sendAndReceive(String path,
+    private static String sendAndReceive(String proxyHeader,
+                                        String path,
                                         Http.RequestMethod method,
                                         String payload,
                                         Iterable<String> headers,
                                         WebServer webServer) throws Exception {
         try (SocketHttpClient s = new SocketHttpClient(webServer)) {
-            s.request(method, path, payload, headers);
+            s.request(proxyHeader, method, path, payload, headers);
 
             return s.receive();
         }
@@ -373,7 +406,7 @@ public class SocketHttpClient implements AutoCloseable {
      * @throws IOException in case of an IO error
      */
     public void request(Http.RequestMethod method, String path, String payload) throws IOException {
-        request(method, path, payload, List.of("Content-Type: application/x-www-form-urlencoded"));
+        request(null, method, path, payload, List.of("Content-Type: application/x-www-form-urlencoded"));
     }
 
     /**
@@ -386,8 +419,24 @@ public class SocketHttpClient implements AutoCloseable {
      * @param headers the headers (e.g., {@code Content-Type: application/json})
      * @throws IOException in case of an IO error
      */
-    public void request(Http.RequestMethod method, String path, String payload, Iterable<String> headers) throws IOException {
-        request(method.name(), path, "HTTP/1.1", "127.0.0.1", headers, payload);
+    public void request(Http.RequestMethod method, String path, String payload, Iterable<String> headers)
+            throws IOException {
+        request(null, method.name(), path, "HTTP/1.1", "127.0.0.1", headers, payload);
+    }
+
+    /**
+     * Sends a request to the webserver.
+     *
+     * @param path    the path to access
+     * @param method  the http method
+     * @param payload the payload to send (must be without the newlines;
+     *                otherwise it's not a valid payload)
+     * @param headers the headers (e.g., {@code Content-Type: application/json})
+     * @throws IOException in case of an IO error
+     */
+    public void request(String proxyHeader, Http.RequestMethod method, String path, String payload,
+                        Iterable<String> headers) throws IOException {
+        request(proxyHeader, method.name(), path, "HTTP/1.1", "127.0.0.1", headers, payload);
     }
 
     /**
@@ -402,7 +451,25 @@ public class SocketHttpClient implements AutoCloseable {
      *
      * @throws IOException in case of an IO error
      */
-    public void request(String method, String path, String protocol, String host, Iterable<String> headers, String payload)
+    public void request(String method, String path, String protocol, String host, Iterable<String> headers,
+                        String payload) throws IOException {
+        request(null, method, path, protocol, host, headers, payload);
+    }
+
+    /**
+     * Send raw data to the server.
+     *
+     * @param method HTTP Method
+     * @param path path
+     * @param protocol protocol
+     * @param host host header value (if null, host header is not sent)
+     * @param headers headers (if null, additional headers are not sent)
+     * @param payload entity (if null, entity is not sent)
+     *
+     * @throws IOException in case of an IO error
+     */
+    public void request(String proxyHeader, String method, String path, String protocol, String host,
+                        Iterable<String> headers, String payload)
             throws IOException {
         List<String> usedHeaders = new LinkedList<>();
         if (headers != null) {
@@ -412,6 +479,10 @@ public class SocketHttpClient implements AutoCloseable {
             usedHeaders.add(0, "Host: " + host);
         }
         PrintWriter pw = new PrintWriter(new OutputStreamWriter(socket.getOutputStream(), StandardCharsets.UTF_8));
+        if (proxyHeader != null) {
+            pw.print(proxyHeader);
+            pw.print(EOL);
+        }
         pw.print(method);
         pw.print(" ");
         pw.print(path);

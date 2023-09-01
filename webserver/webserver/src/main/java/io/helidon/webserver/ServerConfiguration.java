@@ -16,6 +16,7 @@
 
 package io.helidon.webserver;
 
+import javax.net.ssl.SSLContext;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.time.Duration;
@@ -29,8 +30,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
 import java.util.logging.Logger;
-
-import javax.net.ssl.SSLContext;
 
 import io.helidon.common.configurable.AllowList;
 import io.helidon.common.context.Context;
@@ -661,6 +660,12 @@ public interface ServerConfiguration extends SocketConfiguration {
         public Builder context(Context context) {
             this.context = context;
 
+            return this;
+        }
+
+        @Override
+        public Builder enableProxyProtocol(boolean enable) {
+            defaultSocketBuilder().enableProxyProtocol(enable);
             return this;
         }
 

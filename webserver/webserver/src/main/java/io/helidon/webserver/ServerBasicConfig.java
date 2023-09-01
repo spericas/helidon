@@ -16,6 +16,7 @@
 
 package io.helidon.webserver;
 
+import javax.net.ssl.SSLContext;
 import java.net.InetAddress;
 import java.time.Duration;
 import java.util.Collections;
@@ -24,8 +25,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
-
-import javax.net.ssl.SSLContext;
 
 import io.helidon.common.configurable.AllowList;
 import io.helidon.common.context.Context;
@@ -46,6 +45,7 @@ class ServerBasicConfig implements ServerConfiguration {
     private final boolean printFeatureDetails;
     private final AllowList trustedProxies;
     private final boolean isRequestedUriDiscoveryEnabled;
+    private final boolean enableProxyProtocol;
 
     /**
      * Creates new instance.
@@ -63,6 +63,7 @@ class ServerBasicConfig implements ServerConfiguration {
         this.printFeatureDetails = builder.printFeatureDetails();
         this.trustedProxies = builder.defaultSocketBuilder().trustedProxies();
         this.isRequestedUriDiscoveryEnabled = builder.defaultSocketBuilder().requestedUriDiscoveryEnabled();
+        this.enableProxyProtocol = builder.defaultSocketBuilder().enableProxyProtocol();
 
         HashMap<String, SocketConfiguration> map = new HashMap<>(builder.sockets());
         map.put(WebServer.DEFAULT_SOCKET_NAME, this.socketConfig);
@@ -232,6 +233,7 @@ class ServerBasicConfig implements ServerConfiguration {
         private final List<RequestedUriDiscoveryType> requestedUriDiscoveryTypes;
         private final AllowList trustedProxies;
         private final boolean isRequestedUriDiscoveryEnabled;
+        private final boolean enableProxyProtocol;
 
         /**
          * Creates new instance.
@@ -260,6 +262,7 @@ class ServerBasicConfig implements ServerConfiguration {
             this.requestedUriDiscoveryTypes = builder.requestedUriDiscoveryTypes();
             this.trustedProxies = builder.trustedProxies();
             this.isRequestedUriDiscoveryEnabled = builder.requestedUriDiscoveryEnabled();
+            this.enableProxyProtocol = builder.enableProxyProtocol();
         }
 
         @Override
@@ -394,6 +397,11 @@ class ServerBasicConfig implements ServerConfiguration {
         @Override
         public boolean requestedUriDiscoveryEnabled() {
             return isRequestedUriDiscoveryEnabled;
+        }
+
+        @Override
+        public boolean enableProxyProtocol() {
+            return enableProxyProtocol;
         }
     }
 }

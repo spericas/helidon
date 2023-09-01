@@ -839,5 +839,11 @@ public interface WebServer {
 
             return this;
         }
+
+        @Override
+        public Builder enableProxyProtocol(boolean enable) {
+            configurationBuilder.enableProxyProtocol(enable);
+            return this;
+        }
     }
 }

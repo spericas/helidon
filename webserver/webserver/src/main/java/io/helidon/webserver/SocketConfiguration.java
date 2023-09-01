@@ -16,6 +16,7 @@
 
 package io.helidon.webserver;
 
+import javax.net.ssl.SSLContext;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.util.ArrayList;
@@ -27,8 +28,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-
-import javax.net.ssl.SSLContext;
 
 import io.helidon.common.configurable.AllowList;
 import io.helidon.config.Config;
@@ -294,6 +293,15 @@ public interface SocketConfiguration {
      */
     default int maxUpgradeContentLength() {
         return 64 * 1024;
+    }
+
+    /**
+     * Enable Proxy Protocol V2 for Layer 4 load balancers/reverse proxies.
+     *
+     * @return proxy protocol flag
+     */
+    default boolean enableProxyProtocol() {
+        return false;
     }
 
     /**
@@ -588,6 +596,14 @@ public interface SocketConfiguration {
         B trustedProxies(AllowList trustedProxies);
 
         /**
+         * Sets value for enable proxy v2 flag.
+         *
+         * @param enable value of flag
+         */
+        @ConfiguredOption("false")
+        B enableProxyProtocol(boolean enable);
+
+        /**
          * Update this socket configuration from a {@link io.helidon.config.Config}.
          *
          * @param config configuration on the node of a socket
@@ -639,6 +655,9 @@ public interface SocketConfiguration {
             config.get("requested-uri-discovery.trusted-proxies").as(AllowList::create)
                     .ifPresent(this::trustedProxies);
 
+            // proxy protocol v2
+            config.get("enable-proxy-protocol").as(Boolean.class).ifPresent(this::enableProxyProtocol);
+
             return (B) this;
         }
     }
@@ -683,6 +702,7 @@ public interface SocketConfiguration {
         private final List<RequestedUriDiscoveryType> requestedUriDiscoveryTypes = new ArrayList<>();
         private Boolean requestedUriDiscoveryEnabled;
         private AllowList trustedProxies;
+        private boolean enableProxyProtocol;
 
         private Builder() {
         }
@@ -966,6 +986,12 @@ public interface SocketConfiguration {
         }
 
         @Override
+        public Builder enableProxyProtocol(boolean value) {
+            this.enableProxyProtocol = value;
+            return this;
+        }
+
+        @Override
         public Builder config(Config config) {
             SocketConfigurationBuilder.super.config(config);
 
@@ -1089,6 +1115,10 @@ public interface SocketConfiguration {
 
         boolean requestedUriDiscoveryEnabled() {
             return requestedUriDiscoveryEnabled;
+        }
+
+        boolean enableProxyProtocol() {
+            return enableProxyProtocol;
         }
 
         /**
