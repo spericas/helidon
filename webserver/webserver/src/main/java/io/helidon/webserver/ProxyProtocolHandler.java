@@ -55,23 +55,7 @@ import io.netty.util.AttributeKey;
  */
 public class ProxyProtocolHandler extends SimpleChannelInboundHandler<HAProxyMessage> {
     private static final Logger LOGGER = Logger.getLogger(HttpInitializer.class.getName());
-    private static final AttributeKey<PeerIdentity> ATTRIBUTE_KEY = AttributeKey.valueOf("PPV2_METADATA");
-
-    private static void setIdentity(final Channel ch, PeerIdentity peerIdentity) {
-        ch.attr(ATTRIBUTE_KEY).set(peerIdentity);
-    }
-
-    /**
-     * Retrieve the {@link PeerIdentity} parsed from the Proxy Protocol v2 message sent on this channel, if any.
-     * This may return null if the connection did not begin with a Proxy Protocol v2 message (e.g. because it arrived
-     * on the non-PPv2 port)
-     *
-     * @param ch a channel representing a client connection
-     * @return the identity of the peer, if any was received
-     */
-    public static PeerIdentity getIdentity(final Channel ch) {
-        return ch.attr(ATTRIBUTE_KEY).get();
-    }
+    static final AttributeKey<PeerIdentity> PROXY_PEER_IDENTITY = AttributeKey.valueOf("proxy_peer_identity");
 
     /**
      * A decoder that throws decoding exceptions on byte arrays that do not contain ASCII.
@@ -138,7 +122,8 @@ public class ProxyProtocolHandler extends SimpleChannelInboundHandler<HAProxyMes
                 default -> LOGGER.info("Unknown TLV type " + ociType);
             }
         }
-        setIdentity(ctx.channel(), peerIdentityBuilder.build());
+        // Set peer identity as channel attribute
+        ctx.channel().attr(PROXY_PEER_IDENTITY).set(peerIdentityBuilder.build());
     }
 
     @Override

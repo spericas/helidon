@@ -24,6 +24,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import static org.hamcrest.CoreMatchers.containsString;
+import static org.hamcrest.CoreMatchers.startsWith;
 import static org.hamcrest.MatcherAssert.assertThat;
 
 class ProxyProtocolTest extends BaseServerTest {
@@ -34,18 +35,24 @@ class ProxyProtocolTest extends BaseServerTest {
                 .addSource(ConfigSources.classpath("proxy/application.yaml").build().get())
                 .build();
         Routing routing = Routing.builder()
-                .get("/foo", (req, res) -> res.send("OK")).build();
+                .get("/foo", (req, res) -> {
+                    res.headers().add(Http.Header.X_FORWARDED_FOR,
+                                      req.headers().values(Http.Header.X_FORWARDED_FOR));   // copy header back
+                    res.send("OK");
+                }).build();
         startServer(0, routing, config.get("server"));
     }
 
     @Test
-    void testProxyProtocol() throws Exception {
+    void testProxyProtocolV1() throws Exception {
         String s = SocketHttpClient.sendAndReceive(
-                "PROXY TCP4 192.168.0.1 192.168.0.2 56324 8080",
+                // Signature Protocol-Family Source-Address Dest-Address Source-Port Dest-Port
+                "PROXY TCP4 200.0.0.1 192.168.0.2 56324 8080",
                 "/foo",
                 Http.Method.GET,
                 null,
                 webServer());
-        assertThat(s, containsString("OK"));
+        assertThat(s, startsWith("HTTP/1.1 200 OK"));
+        assertThat(s, containsString(Http.Header.X_FORWARDED_FOR + ": 200.0.0.1:56324"));
     }
 }

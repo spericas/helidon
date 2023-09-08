@@ -18,7 +18,7 @@ package io.helidon.webserver;
 /**
  * The identity of a peer, usable for audit logging and IAM policies.
  */
-public class PeerIdentity {
+class PeerIdentity {
 
     /**
      * The client's source address.
@@ -127,7 +127,18 @@ public class PeerIdentity {
         return authority;
     }
 
-    public static class Builder implements io.helidon.common.Builder<PeerIdentity.Builder, PeerIdentity> {
+    public String forwardedFor() {
+        StringBuilder sb = new StringBuilder();
+        if (sourceAddress != null) {
+            sb.append(sourceAddress);
+        }
+        if (sourcePort != 0) {
+            sb.append(":").append(sourcePort);
+        }
+        return sb.toString();
+    }
+
+    static class Builder implements io.helidon.common.Builder<PeerIdentity.Builder, PeerIdentity> {
 
         private String sourceAddress;
         private String destAddress;
@@ -192,7 +203,7 @@ public class PeerIdentity {
 
         @Override
         public PeerIdentity build() {
-            return null;
+            return new PeerIdentity(this);
         }
     }
 }

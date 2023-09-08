@@ -284,6 +284,12 @@ public class ForwardingHandler extends SimpleChannelInboundHandler<Object> {
             LOGGER.finest(formatMsg("Requested URI: %s %s", ctx, request.method(), request.uri()));
         }
 
+        // Proxy protocol
+        PeerIdentity peerIdentity = ctx.channel().attr(ProxyProtocolHandler.PROXY_PEER_IDENTITY).get();
+        if (peerIdentity != null) {
+            request.headers().add(Http.Header.X_FORWARDED_FOR, peerIdentity.forwardedFor());
+        }
+
         // Certificate management
         request.headers().remove(Http.Header.X_HELIDON_CN);
         String cn = ctx.channel().attr(CLIENT_CERTIFICATE_NAME).get();
