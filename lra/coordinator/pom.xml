@@ -31,6 +31,9 @@
     <name>Helidon LRA Coordinator Project</name>
 
     <packaging>pom</packaging>
+    <properties>
+        <java.version>20</java.version>
+    </properties>
 
     <modules>
         <module>client</module>

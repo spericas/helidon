@@ -73,7 +73,7 @@ public interface JdbcConnectionPool extends NamedService {
         if (poolProviders.isEmpty()) {
             throw new DbClientException("No JDBC connection pool provider is available");
         }
-        return poolProviders.getFirst().create(config, config.name());
+        return poolProviders.get(0).create(config, config.name());
     }
 
     /**
