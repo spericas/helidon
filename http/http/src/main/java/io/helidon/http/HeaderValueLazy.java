@@ -63,4 +63,19 @@ class HeaderValueLazy extends HeaderValueBase {
 
         return values.size();
     }
+
+    /**
+     * Overrides to avoid calling {@link #allValues()} and converting its
+     * internal represenation. Useful when debugging.
+     *
+     * @return string representation
+     */
+    @Override
+    public String toString() {
+        return "HttpHeaderImpl["
+                + "name=" + name() + ", "
+                + "values=" + (values == null ? value : allValues()) + ", "
+                + "changing=" + changing() + ", "
+                + "sensitive=" + sensitive() + ']';
+    }
 }
