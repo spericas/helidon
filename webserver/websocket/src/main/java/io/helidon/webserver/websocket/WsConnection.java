@@ -50,6 +50,7 @@ public class WsConnection implements ServerConnection, WsSession {
     private final Headers upgradeHeaders;
     private final String wsKey;
     private final WsListener listener;
+    private final WsConfig wsConfig;
 
     private final BufferData sendBuffer = BufferData.growing(1024);
     private final DataReader dataReader;
@@ -67,7 +68,8 @@ public class WsConnection implements ServerConnection, WsSession {
                          HttpPrologue prologue,
                          Headers upgradeHeaders,
                          String wsKey,
-                         WsRoute wsRoute) {
+                         WsRoute wsRoute,
+                         WsConfig wsConfig) {
         this.ctx = ctx;
         this.prologue = prologue;
         this.upgradeHeaders = upgradeHeaders;
@@ -75,6 +77,7 @@ public class WsConnection implements ServerConnection, WsSession {
         this.listener = wsRoute.listener();
         this.dataReader = ctx.dataReader();
         this.lastRequestTimestamp = DateTime.timestamp();
+        this.wsConfig = wsConfig;
     }
 
     /**
@@ -85,14 +88,16 @@ public class WsConnection implements ServerConnection, WsSession {
      * @param upgradeHeaders headers for
      * @param wsKey          ws key
      * @param wsRoute        route to use
+     * @param wsConfig       websocket config
      * @return a new connection
      */
     public static WsConnection create(ConnectionContext ctx,
                                       HttpPrologue prologue,
                                       Headers upgradeHeaders,
                                       String wsKey,
-                                      WsRoute wsRoute) {
-        return new WsConnection(ctx, prologue, upgradeHeaders, wsKey, wsRoute);
+                                      WsRoute wsRoute,
+                                      WsConfig wsConfig) {
+        return new WsConnection(ctx, prologue, upgradeHeaders, wsKey, wsRoute, wsConfig);
     }
 
     @Override
@@ -243,8 +248,8 @@ public class WsConnection implements ServerConnection, WsSession {
 
     private ClientWsFrame readFrame() {
         try {
-            // TODO check may payload size, danger of oom
-            return ClientWsFrame.read(ctx, dataReader, Integer.MAX_VALUE);
+            int maxFrameLength = wsConfig != null ? wsConfig.maxFrameLength() : Integer.MAX_VALUE;
+            return ClientWsFrame.read(ctx, dataReader, maxFrameLength);
         } catch (DataReader.InsufficientDataAvailableException e) {
             throw new CloseConnectionException("Socket closed by the other side", e);
         } catch (WsCloseException e) {
@@ -276,9 +281,18 @@ public class WsConnection implements ServerConnection, WsSession {
         opCodeFull |= usedCode.code();
         sendBuffer.write(opCodeFull);
 
-        if (frame.payloadLength() < 126) {
-            sendBuffer.write((int) frame.payloadLength());
-            // TODO finish other options (payload longer than 126 bytes)
+        long length = frame.payloadLength();
+        if (length < 126) {
+            sendBuffer.write((int) length);
+        } else if (length < 1 << 16) {
+            sendBuffer.write(126);
+            sendBuffer.write((int) (length >>> 8));
+            sendBuffer.write((int) (length & 0xFF));
+        } else {
+            sendBuffer.write(127);
+            for (int i = 56; i >= 0; i -= 8){
+                sendBuffer.write((int) (length >>> i) & 0xFF);
+            }
         }
         sendBuffer.write(frame.payloadData());
         ctx.dataWriter().writeNow(sendBuffer);

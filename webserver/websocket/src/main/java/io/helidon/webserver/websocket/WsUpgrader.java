@@ -96,12 +96,12 @@ public class WsUpgrader implements Http1Upgrader {
     private static final Base64.Decoder B64_DECODER = Base64.getDecoder();
     private static final Base64.Encoder B64_ENCODER = Base64.getEncoder();
     private static final byte[] HEADERS_SEPARATOR = "\r\n".getBytes(US_ASCII);
-    private final Set<String> origins;
     private final boolean anyOrigin;
+    private final WsConfig wsConfig;
 
     protected WsUpgrader(WsConfig wsConfig) {
-        this.origins = wsConfig.origins();
-        this.anyOrigin = this.origins.isEmpty();
+        this.wsConfig = wsConfig;
+        this.anyOrigin = wsConfig.origins().isEmpty();
     }
 
     /**
@@ -191,7 +191,7 @@ public class WsUpgrader implements Http1Upgrader {
             LOGGER.log(Level.TRACE, "Upgraded to websocket version " + version);
         }
 
-        return WsConnection.create(ctx, prologue, upgradeHeaders.orElse(EMPTY_HEADERS), wsKey, route);
+        return WsConnection.create(ctx, prologue, upgradeHeaders.orElse(EMPTY_HEADERS), wsKey, route, wsConfig);
     }
 
     protected boolean anyOrigin() {
@@ -199,7 +199,7 @@ public class WsUpgrader implements Http1Upgrader {
     }
 
     protected Set<String> origins() {
-        return origins;
+        return wsConfig.origins();
     }
 
     protected String hash(ConnectionContext ctx, String wsKey) {

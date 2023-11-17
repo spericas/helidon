@@ -106,7 +106,8 @@ class DirectWsConnection {
 
     void start() {
         if (serverStarted.compareAndSet(false, true)) {
-            WsConnection serverConnection = WsConnection.create(ctx, prologue, WritableHeaders.create(), "", serverRoute);
+            WsConnection serverConnection = WsConnection.create(ctx, prologue, WritableHeaders.create(), "",
+                                                                serverRoute, null);
 
             ClientWsConnection clientConnection = ClientWsConnection.create(new DirectConnect(clientReader, clientWriter),
                                                                             clientListener);
