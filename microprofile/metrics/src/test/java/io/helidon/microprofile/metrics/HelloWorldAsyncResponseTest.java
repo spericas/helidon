@@ -24,7 +24,6 @@ import java.util.stream.LongStream;
 import io.helidon.microprofile.testing.junit5.AddConfig;
 import io.helidon.microprofile.testing.junit5.HelidonTest;
 import io.helidon.webserver.http.ServerResponse;
-
 import jakarta.inject.Inject;
 import jakarta.ws.rs.client.WebTarget;
 import jakarta.ws.rs.container.AsyncResponse;
@@ -32,7 +31,7 @@ import jakarta.ws.rs.core.MediaType;
 import org.eclipse.microprofile.metrics.MetricID;
 import org.eclipse.microprofile.metrics.MetricRegistry;
 import org.eclipse.microprofile.metrics.Timer;
-import org.eclipse.microprofile.metrics.annotation.RegistryType;
+import org.eclipse.microprofile.metrics.annotation.RegistryScope;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
@@ -63,14 +62,12 @@ public class HelloWorldAsyncResponseTest {
     @Inject
     MetricRegistry registry;
 
-    // TODO change to RegistryScope once MP makes it a qualifier
     @Inject
-    @RegistryType(type = MetricRegistry.Type.BASE)
+    @RegistryScope(scope = MetricRegistry.BASE_SCOPE)
     private MetricRegistry syntheticTimerRegistry;
 
-    // TODO change to RegistryScope once MP makes it a qualifier
     @Inject
-    @RegistryType(type = MetricRegistry.Type.VENDOR)
+    @RegistryScope(scope = MetricRegistry.VENDOR_SCOPE)
     private MetricRegistry vendorRegistry;
 
     @Disabled

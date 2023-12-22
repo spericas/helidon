@@ -68,6 +68,13 @@ class HelidonSnapshot extends Snapshot {
     }
 
     @Override
+    public HistogramBucket[] bucketValues() {
+        return StreamSupport.stream(delegate.histogramCounts().spliterator(), false)
+                .map(hb -> new HistogramBucket(hb.boundary(), hb.count()))
+                .toArray(HistogramBucket[]::new);
+    }
+
+    @Override
     public void dump(OutputStream output) {
         delegate.outputSummary(new PrintStream(output, false, Charset.defaultCharset()), 1);
     }

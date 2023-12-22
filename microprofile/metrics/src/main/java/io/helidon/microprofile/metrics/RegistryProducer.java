@@ -21,9 +21,7 @@ import jakarta.enterprise.inject.Default;
 import jakarta.enterprise.inject.Produces;
 import jakarta.enterprise.inject.spi.InjectionPoint;
 import org.eclipse.microprofile.metrics.MetricRegistry;
-import org.eclipse.microprofile.metrics.MetricRegistry.Type;
 import org.eclipse.microprofile.metrics.annotation.RegistryScope;
-import org.eclipse.microprofile.metrics.annotation.RegistryType;
 
 /**
  * Producer of each type of registry.
@@ -50,23 +48,21 @@ final class RegistryProducer {
         return getApplicationRegistry();
     }
 
-    // TODO Once RegistryScope becomes a qualifier, use it instead of RegistryType.
     @Produces
-    @RegistryType(type = Type.APPLICATION)
+    @RegistryScope
+    public static org.eclipse.microprofile.metrics.MetricRegistry getQualifiedScopedRegistry(InjectionPoint injectionPoint) {
+        return getScopedRegistry(injectionPoint);
+    }
+
+
     public static org.eclipse.microprofile.metrics.MetricRegistry getApplicationRegistry() {
         return RegistryFactory.getInstance().getRegistry(MetricRegistry.APPLICATION_SCOPE);
     }
 
-    @Produces
-    // TODO Once RegistryScope becomes a qualifier, use it instead of RegistryType.
-    @RegistryType(type = Type.BASE)
     public static org.eclipse.microprofile.metrics.MetricRegistry getBaseRegistry() {
         return RegistryFactory.getInstance().getRegistry(MetricRegistry.BASE_SCOPE);
     }
 
-    // TODO Once RegistryScope becomes a qualifier, use it instead of RegistryType.
-    @Produces
-    @RegistryType(type = Type.VENDOR)
     public static org.eclipse.microprofile.metrics.MetricRegistry getVendorRegistry() {
         return RegistryFactory.getInstance().getRegistry(MetricRegistry.VENDOR_SCOPE);
     }

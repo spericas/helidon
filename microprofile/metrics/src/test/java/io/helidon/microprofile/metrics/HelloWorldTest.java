@@ -28,7 +28,6 @@ import io.helidon.microprofile.server.CatchAllExceptionMapper;
 import io.helidon.microprofile.testing.junit5.AddBean;
 import io.helidon.microprofile.testing.junit5.AddConfig;
 import io.helidon.microprofile.testing.junit5.HelidonTest;
-
 import jakarta.inject.Inject;
 import jakarta.ws.rs.client.WebTarget;
 import jakarta.ws.rs.core.MediaType;
@@ -39,7 +38,7 @@ import org.eclipse.microprofile.metrics.MetricID;
 import org.eclipse.microprofile.metrics.MetricRegistry;
 import org.eclipse.microprofile.metrics.Tag;
 import org.eclipse.microprofile.metrics.Timer;
-import org.eclipse.microprofile.metrics.annotation.RegistryType;
+import org.eclipse.microprofile.metrics.annotation.RegistryScope;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -67,7 +66,7 @@ class HelloWorldTest {
     MetricRegistry registry;
 
     @Inject
-    @RegistryType(type = MetricRegistry.Type.BASE)
+    @RegistryScope(scope = MetricRegistry.BASE_SCOPE)
     MetricRegistry restRequestMetricsRegistry;
 
     @BeforeAll
