@@ -35,8 +35,8 @@
             <artifactId>helidon-grpc-core</artifactId>
         </dependency>
         <dependency>
-            <groupId>io.helidon.grpc</groupId>
-            <artifactId>helidon-grpc-client</artifactId>
+            <groupId>io.helidon.webclient</groupId>
+            <artifactId>helidon-webclient-grpc</artifactId>
         </dependency>
         <dependency>
             <groupId>jakarta.enterprise</groupId>
@@ -45,7 +45,7 @@
         </dependency>
         <dependency>
             <groupId>io.helidon.common</groupId>
-            <artifactId>helidon-common-service-loader</artifactId>
+            <artifactId>helidon-common</artifactId>
         </dependency>
         <dependency>
             <groupId>io.helidon.microprofile.config</groupId>

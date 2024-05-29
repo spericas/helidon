@@ -19,7 +19,11 @@
  */
 module io.helidon.grpc.core {
 
+    requires java.logging;
+
     requires io.helidon.common;
+    requires io.helidon.http;
+
     requires transitive io.grpc;
     requires transitive io.grpc.stub;
     requires transitive com.google.protobuf;

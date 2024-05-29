@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, 2021 Oracle and/or its affiliates.
+ * Copyright (c) 2019, 2024 Oracle and/or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,7 +29,7 @@ import java.util.function.Supplier;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
-import io.helidon.common.serviceloader.HelidonServiceLoader;
+import io.helidon.common.HelidonServiceLoader;
 import io.helidon.grpc.core.MarshallerSupplier;
 
 import jakarta.annotation.Priority;
@@ -96,7 +96,7 @@ public abstract class AbstractServiceBuilder {
      */
     protected MarshallerSupplier getMarshallerSupplier() {
         GrpcMarshaller annotation = annotatedServiceClass.getAnnotation(GrpcMarshaller.class);
-        return annotation == null ? MarshallerSupplier.defaultInstance() : ModelHelper.getMarshallerSupplier(annotation);
+        return annotation == null ? MarshallerSupplier.create() : ModelHelper.getMarshallerSupplier(annotation);
     }
 
     /**
