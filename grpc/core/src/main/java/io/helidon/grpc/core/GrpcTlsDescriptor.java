@@ -25,6 +25,7 @@ import io.helidon.config.metadata.ConfiguredOption;
  * GrpcTlsDescriptor contains details about configuring TLS of a {@link io.grpc.Channel}.
  */
 public class GrpcTlsDescriptor {
+
     private final boolean enabled;
     private final boolean jdkSSL;
     private final Resource tlsCert;
@@ -120,7 +121,6 @@ public class GrpcTlsDescriptor {
         private Resource tlsCaCert;
 
         private Builder() {
-
         }
 
         private Builder(Config config) {
