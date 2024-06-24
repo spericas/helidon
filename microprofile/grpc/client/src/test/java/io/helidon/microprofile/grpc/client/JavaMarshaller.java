@@ -25,6 +25,8 @@ import java.io.ObjectOutputStream;
 import io.helidon.grpc.core.MarshallerSupplier;
 
 import io.grpc.MethodDescriptor;
+import jakarta.enterprise.context.Dependent;
+import jakarta.inject.Named;
 
 /**
  * An implementation of a gRPC {@link io.grpc.MethodDescriptor.Marshaller} that
@@ -57,8 +59,10 @@ public class JavaMarshaller<T> implements MethodDescriptor.Marshaller<T> {
      * A {@link io.helidon.grpc.core.MarshallerSupplier} implementation that supplies
      * instances of {@link io.helidon.microprofile.grpc.client.JavaMarshaller}.
      */
-    public static class Supplier
-            implements MarshallerSupplier {
+    @Dependent
+    @Named("java")
+    public static class Supplier implements MarshallerSupplier {
+
         @Override
         public <T> MethodDescriptor.Marshaller<T> get(Class<T> clazz) {
             return new JavaMarshaller<>();

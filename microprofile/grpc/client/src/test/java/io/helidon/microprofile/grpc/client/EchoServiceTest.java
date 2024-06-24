@@ -16,36 +16,66 @@
 
 package io.helidon.microprofile.grpc.client;
 
-import io.helidon.microprofile.grpc.client.test.Echo;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+
+import io.helidon.common.configurable.Resource;
+import io.helidon.common.tls.Tls;
 import io.helidon.microprofile.grpc.core.Grpc;
+import io.helidon.microprofile.grpc.core.GrpcMarshaller;
 import io.helidon.microprofile.grpc.core.Unary;
 import io.helidon.microprofile.grpc.server.GrpcMpCdiExtension;
+import io.helidon.microprofile.testing.junit5.AddBean;
 import io.helidon.microprofile.testing.junit5.AddExtension;
 import io.helidon.microprofile.testing.junit5.HelidonTest;
+import io.helidon.webclient.grpc.GrpcClient;
 
-import io.grpc.Channel;
 import io.grpc.stub.StreamObserver;
+import jakarta.inject.Inject;
+import jakarta.ws.rs.client.WebTarget;
+import org.junit.jupiter.api.Test;
 
 import static io.helidon.grpc.core.ResponseHelper.complete;
+import static org.hamcrest.CoreMatchers.is;
+import static org.hamcrest.MatcherAssert.assertThat;
 
 @HelidonTest
+@AddBean(EchoServiceTest.EchoService.class)
+@AddBean(JavaMarshaller.Supplier.class)
 @AddExtension(GrpcMpCdiExtension.class)
 class EchoServiceTest {
 
-    // @Test
-    void testEcho() {
+    @Inject
+    private WebTarget webTarget;
+
+    @Test
+    void testEcho() throws InterruptedException, ExecutionException, TimeoutException {
+        Tls clientTls = Tls.builder()
+                .trust(trust -> trust
+                        .keystore(store -> store
+                                .passphrase("password")
+                                .trustStore(true)
+                                .keystore(Resource.create("client.p12"))))
+                .build();
+        GrpcClient grpcClient = GrpcClient.builder()
+                .tls(clientTls)
+                .baseUri("https://localhost:" + webTarget.getUri().getPort())
+                .build();
+
         ClientServiceDescriptor descriptor = ClientServiceDescriptor.builder(EchoService.class)
                 .name("EchoService")
                 .marshallerSupplier(new JavaMarshaller.Supplier())
                 .unary("Echo")
                 .build();
 
-        Channel channel = null;     // TODO
-        GrpcServiceClient client = GrpcServiceClient.create(channel, descriptor);
-        StreamObserver<Echo.EchoResponse> observer = new StreamObserver<>() {
+        CompletableFuture<String> future = new CompletableFuture<>();
+        GrpcServiceClient client = GrpcServiceClient.create(grpcClient.channel(), descriptor);
+        StreamObserver<String> observer = new StreamObserver<>() {
             @Override
-            public void onNext(Echo.EchoResponse value) {
-                // TODO check value
+            public void onNext(String value) {
+                future.complete(value);
             }
 
             @Override
@@ -56,11 +86,8 @@ class EchoServiceTest {
             public void onCompleted() {
             }
         };
-        client.unary("Echo", fromString("Howdy"), observer);
-    }
-
-    private Echo.EchoRequest fromString(String value) {
-        return Echo.EchoRequest.newBuilder().setMessage(value).build();
+        client.unary("Echo", "Howdy", observer);
+        assertThat(future.get(5, TimeUnit.SECONDS), is("Howdy"));
     }
 
     @Grpc
@@ -73,11 +100,10 @@ class EchoServiceTest {
          * @param observer the call response
          */
         @Unary(name = "Echo")
-        public void echo(Echo.EchoRequest request, StreamObserver<Echo.EchoResponse> observer) {
+        @GrpcMarshaller("java")
+        public void echo(String request, StreamObserver<String> observer) {
             try {
-                String message = request.getMessage();
-                Echo.EchoResponse response = Echo.EchoResponse.newBuilder().setMessage(message).build();
-                complete(observer, response);
+                complete(observer, request);
             } catch (IllegalStateException e) {
                 observer.onError(e);
             }
