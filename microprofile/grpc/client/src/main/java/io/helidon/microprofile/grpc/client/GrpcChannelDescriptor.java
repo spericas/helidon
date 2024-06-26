@@ -18,10 +18,10 @@ package io.helidon.microprofile.grpc.client;
 
 import java.util.Optional;
 
+import io.helidon.common.tls.Tls;
+import io.helidon.config.Config;
 import io.helidon.config.metadata.Configured;
 import io.helidon.config.metadata.ConfiguredOption;
-import io.helidon.config.objectmapping.Value;
-import io.helidon.grpc.core.GrpcTlsDescriptor;
 
 import io.grpc.NameResolver;
 
@@ -30,20 +30,18 @@ import io.grpc.NameResolver;
  */
 public class GrpcChannelDescriptor {
 
-    private final boolean inProcessChannel;
     private final String host;
     private final int port;
     private final String target;
-    private final GrpcTlsDescriptor tlsDescriptor;
+    private final Tls tls;
     private final String loadBalancerPolicy;
     private final NameResolver.Factory nameResolver;
 
     private GrpcChannelDescriptor(Builder builder) {
-        this.inProcessChannel = builder.inProcessChannel();
         this.target = builder.target();
         this.host = builder.host();
         this.port = builder.port();
-        this.tlsDescriptor = builder.tlsDescriptor();
+        this.tls = builder.tls();
         this.loadBalancerPolicy = builder.loadBalancerPolicy();
         this.nameResolver = builder.nameResolverFactory();
     }
@@ -55,14 +53,6 @@ public class GrpcChannelDescriptor {
      */
     public static Builder builder() {
         return new Builder();
-    }
-
-    /**
-     * Checks if this is a descriptor for building a in process {@link io.grpc.Channel}.
-     * @return true if this is a descriptor for building a in process {@link io.grpc.Channel}
-     */
-    public boolean isInProcessChannel() {
-        return inProcessChannel;
     }
 
     /**
@@ -116,20 +106,12 @@ public class GrpcChannelDescriptor {
     }
 
     /**
-     * Get the {@link io.helidon.grpc.core.GrpcTlsDescriptor}. If this method returns null or
-     * if {@code tlsDescriptor.isEnabled()} is false, then no TLS will be used (and none of the other configuration
-     * values from {@code tlsDescriptor} will be used).
-     * <p>
-     * If the {@link GrpcTlsDescriptor} has been set but the value of {@link io.helidon.grpc.core.GrpcTlsDescriptor#isEnabled()}
-     * returns {@code false} then an empty {@link Optional} will be returned.
+     * Get Tls instance.
      *
-     * @return the optional {@link io.helidon.grpc.core.GrpcTlsDescriptor}
+     * @return the optional {@link io.helidon.common.tls.Tls}
      */
-    public Optional<GrpcTlsDescriptor> tlsDescriptor() {
-        if (tlsDescriptor != null && tlsDescriptor.isEnabled()) {
-            return Optional.of(tlsDescriptor);
-        }
-        return Optional.empty();
+    public Optional<Tls> tls() {
+        return Optional.ofNullable(tls);
     }
 
     /**
@@ -137,22 +119,24 @@ public class GrpcChannelDescriptor {
      */
     @Configured
     public static class Builder implements io.helidon.common.Builder<Builder, GrpcChannelDescriptor> {
-        private boolean inProcessChannel;
         private String host = GrpcChannelsProvider.DEFAULT_HOST;
         private int port = GrpcChannelsProvider.DEFAULT_PORT;
-        private GrpcTlsDescriptor tlsDescriptor;
+        private Tls tls;
         private String target;
         private String loadBalancerPolicy;
         private NameResolver.Factory nameResolver;
 
         /**
-         * Set the host name to connect.
+         * Create a descriptor from a config node.
          *
+         * @param config the config
          * @return this instance for fluent API
          */
-        @Value(key = "inProcess", withDefault = GrpcChannelsProvider.DEFAULT_HOST)
-        public Builder inProcess() {
-            this.inProcessChannel = true;
+        public Builder config(Config config) {
+            config.get("host").as(String.class).ifPresent(this::host);
+            config.get("port").as(Integer.class).ifPresent(this::port);
+            config.get("tls").map(Tls::create).ifPresent(this::tls);
+            config.get("target").as(String.class).ifPresent(this::target);
             return this;
         }
 
@@ -161,13 +145,11 @@ public class GrpcChannelDescriptor {
          * compliant URI, or an authority string.
          *
          * @param target the target string
-         *
          * @return this instance for fluent API
          *
          * @see io.grpc.ManagedChannelBuilder#forTarget(String)
          */
         @ConfiguredOption()
-        @Value
         public Builder target(String target) {
             this.target = target;
             return this;
@@ -175,12 +157,11 @@ public class GrpcChannelDescriptor {
 
         /**
          * Set the host name to connect.
-         * @param host set the host name
          *
+         * @param host set the host name
          * @return this instance for fluent API
          */
         @ConfiguredOption(value = GrpcChannelsProvider.DEFAULT_HOST)
-        @Value(withDefault = GrpcChannelsProvider.DEFAULT_HOST)
         public Builder host(String host) {
             this.host = host;
             return this;
@@ -193,30 +174,27 @@ public class GrpcChannelDescriptor {
          * @return this instance for fluent API
          */
         @ConfiguredOption(value = "" + GrpcChannelsProvider.DEFAULT_PORT)
-        @Value(withDefault = "" + GrpcChannelsProvider.DEFAULT_PORT)
         public Builder port(int port) {
             this.port = port;
             return this;
         }
 
         /**
-         * Set the GrpcTlsDescriptor. If {@code tlsDescriptor} is null or if the {@code tlsDescriptor.isEnabled()} is false,
-         * then no TLS will be used.
-         * @param tlsDescriptor the GrpcSslDescriptor
+         * Sets Tls.
          *
+         * @param tls the TLS instance
          * @return this instance for fluent API
          */
         @ConfiguredOption(key = "tls")
-        @Value(key = "tls")
-        public Builder sslDescriptor(GrpcTlsDescriptor tlsDescriptor) {
-            this.tlsDescriptor = tlsDescriptor;
+        public Builder tls(Tls tls) {
+            this.tls = tls;
             return this;
         }
 
         /**
          * Set the default load balancer policy name.
-         * @param policy the load balancer policy name
          *
+         * @param policy the load balancer policy name
          * @return this instance for fluent API
          *
          * @see io.grpc.ManagedChannelBuilder#defaultLoadBalancingPolicy(String)
@@ -235,17 +213,12 @@ public class GrpcChannelDescriptor {
          * method in the gRPC Java API.
          *
          * @return this instance for fluent API
-         *
          * @see io.grpc.ManagedChannelBuilder#nameResolverFactory(NameResolver.Factory)
          */
         @Deprecated
         public Builder nameResolverFactory(NameResolver.Factory factory) {
             this.nameResolver = factory;
             return this;
-        }
-
-        boolean inProcessChannel() {
-            return inProcessChannel;
         }
 
         String host() {
@@ -256,8 +229,8 @@ public class GrpcChannelDescriptor {
             return port;
         }
 
-        GrpcTlsDescriptor tlsDescriptor() {
-            return tlsDescriptor;
+        Tls tls() {
+            return tls;
         }
 
         String target() {

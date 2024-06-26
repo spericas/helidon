@@ -381,7 +381,6 @@ public final class ClientMethodDescriptor {
             return this;
         }
 
-
         /**
          * Builds and returns a new instance of {@link ClientMethodDescriptor}.
          *
@@ -405,10 +404,10 @@ public final class ClientMethodDescriptor {
             }
 
             return new ClientMethodDescriptor(name,
-                    descriptor.build(),
-                    interceptors,
-                    callCredentials,
-                    methodHandler);
+                                              descriptor.build(),
+                                              interceptors,
+                                              callCredentials,
+                                              methodHandler);
         }
 
     }

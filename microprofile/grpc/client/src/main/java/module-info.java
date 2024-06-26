@@ -15,7 +15,7 @@
  */
 
 /**
- * gRPC microprofile client module
+ * gRPC microprofile client module.
  */
 module io.helidon.microprofile.grpc.client {
 
@@ -23,11 +23,20 @@ module io.helidon.microprofile.grpc.client {
     requires io.helidon.tracing;
     requires io.helidon.config;
     requires io.helidon.config.metadata;
-    requires io.helidon.config.objectmapping;
     requires io.helidon.webclient.grpc;
     requires io.helidon.common.tls;
+    requires io.helidon.microprofile.grpc.core;
+
+    requires io.grpc;
+    requires jakarta.cdi;
+    requires jakarta.inject;
+    requires java.logging;
 
     requires transitive io.helidon.grpc.core;
-    requires io.grpc;
+
+    exports io.helidon.microprofile.grpc.client;
+
+    provides jakarta.enterprise.inject.spi.Extension with
+            io.helidon.microprofile.grpc.client.GrpcClientCdiExtension;
 
 }
