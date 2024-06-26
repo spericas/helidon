@@ -45,10 +45,15 @@ import static org.hamcrest.MatcherAssert.assertThat;
 @AddBean(EchoServiceTest.EchoService.class)
 @AddBean(JavaMarshaller.Supplier.class)
 @AddExtension(GrpcMpCdiExtension.class)
+@AddExtension(GrpcClientCdiExtension.class)
 class EchoServiceTest {
 
     @Inject
     private WebTarget webTarget;
+
+    @Inject
+    @GrpcProxy
+    private EchoServiceClient proxyClient;
 
     @Test
     void testEcho() throws InterruptedException, ExecutionException, TimeoutException {
@@ -90,17 +95,32 @@ class EchoServiceTest {
         assertThat(future.get(5, TimeUnit.SECONDS), is("Howdy"));
     }
 
+    @Test
+    void testEchoInject() throws InterruptedException, ExecutionException, TimeoutException {
+        CompletableFuture<String> future = new CompletableFuture<>();
+        StreamObserver<String> observer = new StreamObserver<>() {
+            @Override
+            public void onNext(String value) {
+                future.complete(value);
+            }
+
+            @Override
+            public void onError(Throwable t) {
+            }
+
+            @Override
+            public void onCompleted() {
+            }
+        };
+        proxyClient.echo("Howdy", observer);
+        assertThat(future.get(5, TimeUnit.SECONDS), is("Howdy"));
+    }
+
     @Grpc
+    @GrpcMarshaller("java")
     public static class EchoService {
 
-        /**
-         * Echo the message back to the caller.
-         *
-         * @param request the echo request containing the message to echo
-         * @param observer the call response
-         */
         @Unary(name = "Echo")
-        @GrpcMarshaller("java")
         public void echo(String request, StreamObserver<String> observer) {
             try {
                 complete(observer, request);
@@ -108,5 +128,14 @@ class EchoServiceTest {
                 observer.onError(e);
             }
         }
+    }
+
+    @Grpc(name = "EchoService")
+    @GrpcMarshaller("java")
+    @GrpcChannel(name = "echo-channel")
+    public interface EchoServiceClient {
+
+        @Unary(name = "Echo")
+        void echo(String request, StreamObserver<String> observer);
     }
 }

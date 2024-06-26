@@ -16,13 +16,13 @@
 
 package io.helidon.microprofile.grpc.client;
 
+import java.lang.reflect.Method;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
 import io.helidon.common.tls.Tls;
 import io.helidon.config.Config;
-import io.helidon.grpc.core.GrpcTlsDescriptor;
 import io.helidon.webclient.grpc.GrpcClient;
 
 import io.grpc.CallOptions;
@@ -30,6 +30,8 @@ import io.grpc.Channel;
 import io.grpc.ClientCall;
 import io.grpc.ManagedChannel;
 import io.grpc.MethodDescriptor;
+import jakarta.enterprise.inject.spi.CDI;
+import jakarta.enterprise.inject.spi.Extension;
 
 /**
  * GrpcChannelsProvider is a factory for pre-configured gRPC Channel instances.
@@ -125,31 +127,45 @@ public class GrpcChannelsProvider {
         }
         GrpcChannelDescriptor chCfg = channelConfigs.computeIfAbsent(name, hostName ->
                 GrpcChannelDescriptor.builder().host(name).build());
-        return createChannel(chCfg);
+        return createChannel(name, chCfg);
     }
 
     Map<String, GrpcChannelDescriptor> channels() {
         return channelConfigs;
     }
 
-    ManagedChannel createChannel(GrpcChannelDescriptor descriptor) {
-        GrpcTlsDescriptor tlsDescriptor = descriptor.tlsDescriptor().orElse(null);
-        if (tlsDescriptor == null) {
-            throw new IllegalArgumentException("Missing TLS information in gRPC channel descriptor");
+    ManagedChannel createChannel(String name, GrpcChannelDescriptor descriptor) {
+        Tls clientTls = descriptor.tls().orElse(null);
+        if (clientTls == null) {
+            throw new IllegalArgumentException("Client TLS must be configured for gRPC proxy client");
         }
-        // TODO mutual TLS
-        Tls clientTls = Tls.builder()
-                .trust(trust -> trust
-                        .keystore(store -> store
-                                .passphrase("password")
-                                .trustStore(true)
-                                .keystore(tlsDescriptor.tlsCaCert())))
-                .build();
+        int port = descriptor.port();
+        if (port <= 0) {
+            port = discoverServerPort();
+        }
         GrpcClient grpcClient = GrpcClient.builder()
                 .tls(clientTls)
-                .baseUri("https://" + descriptor.host() + ":" + descriptor.port())
+                .baseUri("https://" + descriptor.host() + ":" + port)
                 .build();
         return new GrpcManagedChannel(grpcClient.channel());
+    }
+
+    /**
+     * TODO This code should be moved to a Junit test module.
+     *
+     * @return server port
+     */
+    @SuppressWarnings("unchecked")
+    private static int discoverServerPort() {
+        try {
+            Class<? extends Extension> extClass = (Class<? extends Extension>) Class
+                    .forName("io.helidon.microprofile.server.ServerCdiExtension");
+            Extension extension = CDI.current().getBeanManager().getExtension(extClass);
+            Method m = extension.getClass().getMethod("port", String.class);
+            return (int) m.invoke(extension, new Object[] {"@default"});
+        } catch (ReflectiveOperationException e) {
+            return 0;
+        }
     }
 
     /**
@@ -162,6 +178,7 @@ public class GrpcChannelsProvider {
         GrpcManagedChannel(Channel delegate) {
             this.delegate = delegate;
         }
+
         @Override
         public ManagedChannel shutdown() {
             return this;
@@ -218,7 +235,7 @@ public class GrpcChannelsProvider {
             if (channelsConfig.exists()) {
                 for (Config channelConfig : channelsConfig.asNodeList().get()) {
                     String key = channelConfig.key().name();
-                    GrpcChannelDescriptor cfg = channelConfig.asNode().get().as(GrpcChannelDescriptor.class).get();
+                    GrpcChannelDescriptor cfg = GrpcChannelDescriptor.builder().config(channelConfig).build();
                     channelConfigs.put(key, cfg);
                 }
             }
