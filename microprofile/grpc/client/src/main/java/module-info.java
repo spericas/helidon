@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, 2024 Oracle and/or its affiliates.
+ * Copyright (c) 2024 Oracle and/or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,22 +15,28 @@
  */
 
 /**
- * Helidon GRPC core package.
+ * gRPC microprofile client module.
  */
-module io.helidon.grpc.core {
+module io.helidon.microprofile.grpc.client {
 
     requires io.helidon.common;
-    requires io.helidon.http;
-    requires io.helidon.common.context;
     requires io.helidon.tracing;
+    requires io.helidon.config;
+    requires io.helidon.config.metadata;
+    requires io.helidon.webclient.grpc;
+    requires io.helidon.common.tls;
+    requires io.helidon.microprofile.grpc.core;
 
+    requires io.grpc;
+    requires jakarta.cdi;
+    requires jakarta.inject;
     requires java.logging;
 
-    requires transitive io.grpc;
-    requires transitive io.grpc.stub;
-    requires transitive com.google.protobuf;
-    requires transitive io.grpc.protobuf;
-    requires transitive io.grpc.protobuf.lite;
+    requires transitive io.helidon.grpc.core;
 
-    exports io.helidon.grpc.core;
+    exports io.helidon.microprofile.grpc.client;
+
+    provides jakarta.enterprise.inject.spi.Extension with
+            io.helidon.microprofile.grpc.client.GrpcClientCdiExtension;
+
 }
