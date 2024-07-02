@@ -19,17 +19,12 @@ package io.helidon.microprofile.grpc.client;
 import java.lang.reflect.Method;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.concurrent.TimeUnit;
 
 import io.helidon.common.tls.Tls;
 import io.helidon.config.Config;
 import io.helidon.webclient.grpc.GrpcClient;
 
-import io.grpc.CallOptions;
 import io.grpc.Channel;
-import io.grpc.ClientCall;
-import io.grpc.ManagedChannel;
-import io.grpc.MethodDescriptor;
 import jakarta.enterprise.inject.spi.CDI;
 import jakarta.enterprise.inject.spi.Extension;
 
@@ -106,7 +101,7 @@ public class GrpcChannelsProvider {
     // --------------- private methods of GrpcChannelsProvider ---------------
 
     /**
-     * Returns a {@link ManagedChannel} for the specified channel or host name.
+     * Returns a {@link Channel} for the specified channel or host name.
      * <p>
      * If the specified channel name does not exist in the configuration, we will assume
      * that it represents the name of the gRPC host to connect to and will create a plain text
@@ -114,11 +109,11 @@ public class GrpcChannelsProvider {
      *
      * @param name the name of the channel configuration as specified in the configuration file,
      *             or the name of the host to connect to
-     * @return a new instance of {@link ManagedChannel}
+     * @return a new instance of {@link Channel}
      * @throws NullPointerException if name is null
      * @throws IllegalArgumentException if name is empty
      */
-    public ManagedChannel channel(String name) {
+    public Channel channel(String name) {
         if (name == null) {
             throw new NullPointerException("name cannot be null.");
         }
@@ -130,11 +125,7 @@ public class GrpcChannelsProvider {
         return createChannel(name, chCfg);
     }
 
-    Map<String, GrpcChannelDescriptor> channels() {
-        return channelConfigs;
-    }
-
-    ManagedChannel createChannel(String name, GrpcChannelDescriptor descriptor) {
+    Channel createChannel(String name, GrpcChannelDescriptor descriptor) {
         Tls clientTls = descriptor.tls().orElse(null);
         if (clientTls == null) {
             throw new IllegalArgumentException("Client TLS must be configured for gRPC proxy client");
@@ -147,11 +138,12 @@ public class GrpcChannelsProvider {
                 .tls(clientTls)
                 .baseUri("https://" + descriptor.host() + ":" + port)
                 .build();
-        return new GrpcManagedChannel(grpcClient.channel());
+        return grpcClient.channel();
     }
 
     /**
-     * TODO This code should be moved to a Junit test module.
+     * Used for unit testing: if port not set, then obtain port from CDI extension
+     * via reflection. Should be moved to a testing module.
      *
      * @return server port
      */
@@ -165,54 +157,6 @@ public class GrpcChannelsProvider {
             return (int) m.invoke(extension, new Object[] {"@default"});
         } catch (ReflectiveOperationException e) {
             return 0;
-        }
-    }
-
-    /**
-     * A managed channel wrapper over a {@link GrpcClient} channel.
-     */
-    private static class GrpcManagedChannel extends ManagedChannel {
-
-        private final Channel delegate;
-
-        GrpcManagedChannel(Channel delegate) {
-            this.delegate = delegate;
-        }
-
-        @Override
-        public ManagedChannel shutdown() {
-            return this;
-        }
-
-        @Override
-        public boolean isShutdown() {
-            return false;
-        }
-
-        @Override
-        public boolean isTerminated() {
-            return false;
-        }
-
-        @Override
-        public ManagedChannel shutdownNow() {
-            return this;
-        }
-
-        @Override
-        public boolean awaitTermination(long timeout, TimeUnit unit) throws InterruptedException {
-            return false;
-        }
-
-        @Override
-        public <ReqT, ResT> ClientCall<ReqT, ResT> newCall(MethodDescriptor<ReqT, ResT> methodDescriptor,
-                                                           CallOptions callOptions) {
-            return delegate.newCall(methodDescriptor, callOptions);
-        }
-
-        @Override
-        public String authority() {
-            return delegate.authority();
         }
     }
 
