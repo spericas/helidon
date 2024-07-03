@@ -19,8 +19,6 @@ package io.helidon.microprofile.grpc.client;
 import java.util.Objects;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 
 import io.helidon.common.Builder;
 import io.helidon.grpc.core.MethodHandler;
@@ -32,6 +30,8 @@ import io.helidon.microprofile.grpc.core.GrpcMethod;
 import io.helidon.microprofile.grpc.core.Instance;
 import io.helidon.microprofile.grpc.core.ModelHelper;
 
+import static java.lang.System.Logger.Level;
+
 /**
  * A builder for constructing a {@link io.helidon.microprofile.grpc.client.ClientServiceDescriptor.Builder} instances
  * from an annotated POJO.
@@ -39,7 +39,7 @@ import io.helidon.microprofile.grpc.core.ModelHelper;
 class GrpcClientBuilder extends AbstractServiceBuilder
         implements Builder<GrpcClientBuilder, ClientServiceDescriptor.Builder> {
 
-    private static final Logger LOGGER = Logger.getLogger(GrpcClientBuilder.class.getName());
+    private static final System.Logger LOGGER = System.getLogger(GrpcClientBuilder.class.getName());
 
     /**
      * Create a {@link GrpcClientBuilder} for a given gRPC service class.
@@ -96,7 +96,7 @@ class GrpcClientBuilder extends AbstractServiceBuilder
 
         addServiceMethods(builder, methodList);
 
-        LOGGER.log(Level.FINEST, () -> String.format("A new gRPC service was created by ServiceModeller: %s", builder));
+        LOGGER.log(Level.DEBUG, () -> String.format("A new gRPC service was created by ServiceModeller: %s", builder));
 
         return builder;
     }
@@ -154,7 +154,7 @@ class GrpcClientBuilder extends AbstractServiceBuilder
             break;
         case UNKNOWN:
         default:
-            LOGGER.log(Level.SEVERE, () -> "Unrecognized method type " + annotation.type());
+            LOGGER.log(Level.ERROR, () -> "Unrecognized method type " + annotation.type());
         }
     }
 
