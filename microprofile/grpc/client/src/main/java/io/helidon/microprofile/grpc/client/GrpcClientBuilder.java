@@ -22,12 +22,12 @@ import java.util.function.Supplier;
 
 import io.helidon.common.Builder;
 import io.helidon.grpc.core.MethodHandler;
+import io.helidon.microprofile.grpc.api.GrpcMarshaller;
+import io.helidon.microprofile.grpc.api.GrpcMethod;
 import io.helidon.microprofile.grpc.core.AbstractServiceBuilder;
 import io.helidon.microprofile.grpc.core.AnnotatedMethod;
 import io.helidon.microprofile.grpc.core.AnnotatedMethodList;
-import io.helidon.microprofile.grpc.core.GrpcMarshaller;
-import io.helidon.microprofile.grpc.core.GrpcMethod;
-import io.helidon.microprofile.grpc.core.Instance;
+import io.helidon.microprofile.grpc.core.InstanceSupplier;
 import io.helidon.microprofile.grpc.core.ModelHelper;
 
 import static java.lang.System.Logger.Level;
@@ -60,7 +60,7 @@ class GrpcClientBuilder extends AbstractServiceBuilder
      * @return a {@link GrpcClientBuilder}
      */
     static GrpcClientBuilder create(Object service) {
-        return new GrpcClientBuilder(service.getClass(), Instance.singleton(service));
+        return new GrpcClientBuilder(service.getClass(), InstanceSupplier.singleton(service));
     }
 
     /**

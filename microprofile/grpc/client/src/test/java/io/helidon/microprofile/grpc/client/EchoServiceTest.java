@@ -23,9 +23,9 @@ import java.util.concurrent.TimeoutException;
 
 import io.helidon.common.configurable.Resource;
 import io.helidon.common.tls.Tls;
-import io.helidon.microprofile.grpc.core.Grpc;
-import io.helidon.microprofile.grpc.core.GrpcMarshaller;
-import io.helidon.microprofile.grpc.core.Unary;
+import io.helidon.microprofile.grpc.api.Grpc;
+import io.helidon.microprofile.grpc.api.GrpcMarshaller;
+import io.helidon.microprofile.grpc.api.Unary;
 import io.helidon.microprofile.grpc.server.GrpcMpCdiExtension;
 import io.helidon.microprofile.testing.junit5.AddBean;
 import io.helidon.microprofile.testing.junit5.AddExtension;
