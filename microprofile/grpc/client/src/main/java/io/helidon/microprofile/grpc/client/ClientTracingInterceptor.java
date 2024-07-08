@@ -191,7 +191,7 @@ public class ClientTracingInterceptor implements ClientInterceptor {
         }
 
         /**
-         * @param operationNameConstructor to name all spans created by this intercepter
+         * @param operationNameConstructor to name all spans created by this interceptor
          * @return this Builder with configured operation name
          */
         public Builder withOperationName(GrpcTracingName operationNameConstructor) {
