@@ -23,9 +23,9 @@ import java.util.concurrent.TimeoutException;
 
 import io.helidon.common.configurable.Resource;
 import io.helidon.common.tls.Tls;
-import io.helidon.microprofile.grpc.api.Grpc;
-import io.helidon.microprofile.grpc.api.GrpcMarshaller;
-import io.helidon.microprofile.grpc.api.Unary;
+import io.helidon.grpc.api.Grpc;
+import io.helidon.grpc.api.GrpcMarshaller;
+import io.helidon.grpc.api.Unary;
 import io.helidon.microprofile.grpc.server.GrpcMpCdiExtension;
 import io.helidon.microprofile.testing.junit5.AddBean;
 import io.helidon.microprofile.testing.junit5.AddExtension;
@@ -120,7 +120,7 @@ class EchoServiceTest {
     @GrpcMarshaller("java")
     public static class EchoService {
 
-        @Unary(name = "Echo")
+        @Unary("Echo")
         public void echo(String request, StreamObserver<String> observer) {
             try {
                 complete(observer, request);
@@ -130,12 +130,12 @@ class EchoServiceTest {
         }
     }
 
-    @Grpc(name = "EchoService")
+    @Grpc("EchoService")
     @GrpcMarshaller("java")
-    @GrpcChannel(name = "echo-channel")
+    @GrpcChannel(value = "echo-channel")
     public interface EchoServiceClient {
 
-        @Unary(name = "Echo")
+        @Unary("Echo")
         void echo(String request, StreamObserver<String> observer);
     }
 }

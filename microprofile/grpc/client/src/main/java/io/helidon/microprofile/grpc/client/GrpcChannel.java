@@ -16,13 +16,11 @@
 
 package io.helidon.microprofile.grpc.client;
 
-import java.io.Serial;
 import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
-import jakarta.enterprise.util.AnnotationLiteral;
 import jakarta.enterprise.util.Nonbinding;
 import jakarta.inject.Qualifier;
 
@@ -36,7 +34,7 @@ import jakarta.inject.Qualifier;
  *
  * <pre>
  *     &#064;Inject
- *     &#064;GrpcChannel(name = "foo")
+ *     &#064;GrpcChannel("foo")
  *     private Channel channel;
  * </pre>
  *
@@ -45,7 +43,7 @@ import jakarta.inject.Qualifier;
  *
  * <pre>
  *     &#064;Inject
- *     &#064;GrpcChannel(name = "foo")
+ *     &#064;GrpcChannel("foo")
  *     &#064;GrpcProxy
  *     private FooServiceClient client;
  * </pre>
@@ -54,8 +52,8 @@ import jakarta.inject.Qualifier;
  * be specified on the client interface instead:
  *
  * <pre>
- *     &#064;Grpc(name = "FooService")
- *     &#064;GrpcChannel(name = "foo")
+ *     &#064;Grpc("FooService")
+ *     &#064;GrpcChannel("foo")
  *     public interface FooServiceClient {
  *         ...
  *     };
@@ -66,30 +64,11 @@ import jakarta.inject.Qualifier;
 @Retention(RetentionPolicy.RUNTIME)
 @Qualifier
 public @interface GrpcChannel {
+
     /**
      * The name of the configured channel or gRPC server host.
      *
      * @return name of the channel
      */
-    @Nonbinding String name();
-
-    /**
-     * An {@link jakarta.enterprise.util.AnnotationLiteral} for the
-     * {@link GrpcChannel} annotation.
-     */
-    class Literal extends AnnotationLiteral<GrpcChannel> implements GrpcChannel {
-
-        /**
-         * The singleton instance of {@link io.helidon.microprofile.grpc.client.GrpcChannel.Literal}.
-         */
-        public static final Literal INSTANCE = new Literal();
-
-        @Serial
-        private static final long serialVersionUID = 1L;
-
-        @Override
-        public String name() {
-            return "";
-        }
-    }
+    @Nonbinding String value();
 }

@@ -56,7 +56,7 @@ public class ChannelProducer {
      * @return a gRPC {@link io.grpc.Channel}
      */
     @Produces
-    @GrpcChannel(name = GrpcChannelsProvider.DEFAULT_CHANNEL_NAME)
+    @GrpcChannel(value = GrpcChannelsProvider.DEFAULT_CHANNEL_NAME)
     public Channel get(InjectionPoint injectionPoint) {
         GrpcChannel qualifier = injectionPoint.getQualifiers()
                 .stream()
@@ -65,7 +65,7 @@ public class ChannelProducer {
                 .findFirst()
                 .orElse(null);
 
-        String name = (qualifier == null) ? GrpcChannelsProvider.DEFAULT_CHANNEL_NAME : qualifier.name();
+        String name = (qualifier == null) ? GrpcChannelsProvider.DEFAULT_CHANNEL_NAME : qualifier.value();
         return findChannel(name);
     }
 

@@ -46,8 +46,8 @@ public class GrpcProxyBuilder<T> implements Builder<GrpcProxyBuilder<T>, T> {
      * for a given gRPC service interface.
      * <p>
      * The class passed to this method should be properly annotated with
-     * {@link io.helidon.microprofile.grpc.api.Grpc} and
-     * {@link io.helidon.microprofile.grpc.api.GrpcMethod} annotations
+     * {@link io.helidon.grpc.api.Grpc} and
+     * {@link io.helidon.grpc.api.GrpcMethod} annotations
      * so that the proxy can properly route calls to the server.
      *
      * @param channel  the {@link io.grpc.Channel} to connect to the server

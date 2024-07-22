@@ -21,9 +21,9 @@ import java.util.function.Consumer;
 import java.util.function.Supplier;
 
 import io.helidon.common.Builder;
+import io.helidon.grpc.api.GrpcMarshaller;
+import io.helidon.grpc.api.GrpcMethod;
 import io.helidon.grpc.core.MethodHandler;
-import io.helidon.microprofile.grpc.api.GrpcMarshaller;
-import io.helidon.microprofile.grpc.api.GrpcMethod;
 import io.helidon.microprofile.grpc.core.AbstractServiceBuilder;
 import io.helidon.microprofile.grpc.core.AnnotatedMethod;
 import io.helidon.microprofile.grpc.core.AnnotatedMethodList;
@@ -139,7 +139,7 @@ class GrpcClientBuilder extends AbstractServiceBuilder
         Class<?> responseType = handler.getResponseType();
         AnnotatedMethodConfigurer configurer = new AnnotatedMethodConfigurer(method, requestType, responseType, handler);
 
-        switch (annotation.type()) {
+        switch (annotation.value()) {
         case UNARY:
             builder.unary(name, configurer);
             break;
@@ -154,7 +154,7 @@ class GrpcClientBuilder extends AbstractServiceBuilder
             break;
         case UNKNOWN:
         default:
-            LOGGER.log(Level.ERROR, () -> "Unrecognized method type " + annotation.type());
+            LOGGER.log(Level.ERROR, () -> "Unrecognized method type " + annotation.value());
         }
     }
 

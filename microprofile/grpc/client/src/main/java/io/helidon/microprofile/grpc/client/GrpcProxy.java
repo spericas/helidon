@@ -16,13 +16,11 @@
 
 package io.helidon.microprofile.grpc.client;
 
-import java.io.Serial;
 import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
-import jakarta.enterprise.util.AnnotationLiteral;
 import jakarta.inject.Qualifier;
 
 /**
@@ -33,19 +31,4 @@ import jakarta.inject.Qualifier;
 @Retention(RetentionPolicy.RUNTIME)
 @Qualifier
 public @interface GrpcProxy {
-
-    /**
-     * An {@link jakarta.enterprise.util.AnnotationLiteral} for the
-     * {@link io.helidon.microprofile.grpc.client.GrpcProxy} annotation.
-     */
-    class Literal extends AnnotationLiteral<GrpcProxy> implements GrpcProxy {
-
-        /**
-         * The singleton instance of {@link io.helidon.microprofile.grpc.client.GrpcProxy.Literal}.
-         */
-        public static final Literal INSTANCE = new Literal();
-
-        @Serial
-        private static final long serialVersionUID = 1L;
-    }
 }

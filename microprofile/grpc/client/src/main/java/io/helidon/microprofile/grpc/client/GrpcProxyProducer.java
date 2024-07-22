@@ -48,16 +48,16 @@ class GrpcProxyProducer {
      * @return a gRPC client proxy
      */
     @GrpcProxy
-    @GrpcChannel(name = GrpcChannelsProvider.DEFAULT_CHANNEL_NAME)
+    @GrpcChannel(value = GrpcChannelsProvider.DEFAULT_CHANNEL_NAME)
     static Object proxyUsingNamedChannel(InjectionPoint injectionPoint, ChannelProducer producer) {
         Class<?> type = ModelHelper.getGenericType(injectionPoint.getType());
 
         String channelName;
         if (injectionPoint.getAnnotated().isAnnotationPresent(GrpcChannel.class)) {
-            channelName = injectionPoint.getAnnotated().getAnnotation(GrpcChannel.class).name();
+            channelName = injectionPoint.getAnnotated().getAnnotation(GrpcChannel.class).value();
         } else {
             channelName = type.isAnnotationPresent(GrpcChannel.class)
-                    ? type.getAnnotation(GrpcChannel.class).name()
+                    ? type.getAnnotation(GrpcChannel.class).value()
                     : GrpcChannelsProvider.DEFAULT_CHANNEL_NAME;
         }
 
