@@ -16,6 +16,8 @@
 
 package io.helidon.microprofile.grpc.client;
 
+import io.helidon.grpc.api.GrpcChannel;
+import io.helidon.grpc.api.GrpcProxy;
 import io.helidon.microprofile.grpc.core.ModelHelper;
 
 import io.grpc.Channel;
@@ -37,9 +39,8 @@ class GrpcProxyProducer {
     /**
      * A CDI producer method that produces a client proxy for a gRPC service that
      * will connect to the server using the channel specified via
-     * {@link io.helidon.microprofile.grpc.client.GrpcChannel}
-     * annotation on the proxy interface or injection point, or the default
-     * {@link io.grpc.Channel}.
+     * {@link io.helidon.grpc.api.GrpcChannel} annotation on the proxy interface
+     * or injection point, or the default {@link io.grpc.Channel}.
      * <p>
      * This is not a real producer method but is used as a stub by the gRPC client
      * CDI extension to create real producers as injection points are discovered.

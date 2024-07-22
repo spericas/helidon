@@ -21,6 +21,7 @@ import java.util.Map;
 import java.util.concurrent.locks.ReentrantLock;
 
 import io.helidon.config.Config;
+import io.helidon.grpc.api.GrpcChannel;
 
 import io.grpc.Channel;
 import jakarta.enterprise.context.ApplicationScoped;

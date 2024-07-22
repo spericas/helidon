@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, 2024 Oracle and/or its affiliates.
+ * Copyright (c) 2024 Oracle and/or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,21 +14,25 @@
  * limitations under the License.
  */
 
-package io.helidon.microprofile.grpc.client;
+package io.helidon.grpc.api;
 
 import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
-import jakarta.inject.Qualifier;
-
 /**
- * A qualifier annotation used to mark an injection point for
- * a gRPC service client proxy.
+ * An annotation that can be used to specify the name of a configured gRPC channel.
+ * channel to inject, or the name of the host to connect to, as described in
  */
-@Target({ElementType.METHOD, ElementType.FIELD, ElementType.PARAMETER})
+@Target({ElementType.TYPE, ElementType.METHOD, ElementType.CONSTRUCTOR, ElementType.FIELD, ElementType.PARAMETER})
 @Retention(RetentionPolicy.RUNTIME)
-@Qualifier
-public @interface GrpcProxy {
+public @interface GrpcChannel {
+
+    /**
+     * The name of the configured channel.
+     *
+     * @return name of the channel
+     */
+    String value();
 }

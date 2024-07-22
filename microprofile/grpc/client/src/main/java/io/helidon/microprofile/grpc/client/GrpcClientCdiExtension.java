@@ -20,6 +20,9 @@ import java.lang.reflect.Type;
 import java.util.HashSet;
 import java.util.Set;
 
+import io.helidon.grpc.api.GrpcChannel;
+import io.helidon.grpc.api.GrpcProxy;
+
 import jakarta.enterprise.event.Observes;
 import jakarta.enterprise.inject.spi.AfterBeanDiscovery;
 import jakarta.enterprise.inject.spi.Annotated;
