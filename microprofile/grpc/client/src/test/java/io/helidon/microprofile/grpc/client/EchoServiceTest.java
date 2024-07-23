@@ -24,10 +24,6 @@ import java.util.concurrent.TimeoutException;
 import io.helidon.common.configurable.Resource;
 import io.helidon.common.tls.Tls;
 import io.helidon.grpc.api.Grpc;
-import io.helidon.grpc.api.GrpcChannel;
-import io.helidon.grpc.api.GrpcMarshaller;
-import io.helidon.grpc.api.GrpcProxy;
-import io.helidon.grpc.api.Unary;
 import io.helidon.microprofile.grpc.server.GrpcMpCdiExtension;
 import io.helidon.microprofile.testing.junit5.AddBean;
 import io.helidon.microprofile.testing.junit5.AddExtension;
@@ -54,7 +50,7 @@ class EchoServiceTest {
     private WebTarget webTarget;
 
     @Inject
-    @GrpcProxy
+    @Grpc.GrpcProxy
     private EchoServiceClient proxyClient;
 
     @Test
@@ -118,11 +114,11 @@ class EchoServiceTest {
         assertThat(future.get(5, TimeUnit.SECONDS), is("Howdy"));
     }
 
-    @Grpc
-    @GrpcMarshaller("java")
+    @Grpc.GrpcService
+    @Grpc.GrpcMarshaller("java")
     public static class EchoService {
 
-        @Unary("Echo")
+        @Grpc.Unary("Echo")
         public void echo(String request, StreamObserver<String> observer) {
             try {
                 complete(observer, request);
@@ -132,12 +128,12 @@ class EchoServiceTest {
         }
     }
 
-    @Grpc("EchoService")
-    @GrpcMarshaller("java")
-    @GrpcChannel(value = "echo-channel")
+    @Grpc.GrpcService("EchoService")
+    @Grpc.GrpcMarshaller("java")
+    @Grpc.GrpcChannel(value = "echo-channel")
     public interface EchoServiceClient {
 
-        @Unary("Echo")
+        @Grpc.Unary("Echo")
         void echo(String request, StreamObserver<String> observer);
     }
 }

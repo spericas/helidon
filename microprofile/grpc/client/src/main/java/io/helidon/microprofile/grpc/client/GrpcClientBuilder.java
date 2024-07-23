@@ -21,8 +21,7 @@ import java.util.function.Consumer;
 import java.util.function.Supplier;
 
 import io.helidon.common.Builder;
-import io.helidon.grpc.api.GrpcMarshaller;
-import io.helidon.grpc.api.GrpcMethod;
+import io.helidon.grpc.api.Grpc;
 import io.helidon.grpc.core.MethodHandler;
 import io.helidon.microprofile.grpc.core.AbstractServiceBuilder;
 import io.helidon.microprofile.grpc.core.AnnotatedMethod;
@@ -108,10 +107,10 @@ class GrpcClientBuilder extends AbstractServiceBuilder
      * @param methodList  the list of methods to add
      */
     private void addServiceMethods(ClientServiceDescriptor.Builder builder, AnnotatedMethodList methodList) {
-        for (AnnotatedMethod am : methodList.withAnnotation(GrpcMethod.class)) {
+        for (AnnotatedMethod am : methodList.withAnnotation(Grpc.GrpcMethod.class)) {
             addServiceMethod(builder, am);
         }
-        for (AnnotatedMethod am : methodList.withMetaAnnotation(GrpcMethod.class)) {
+        for (AnnotatedMethod am : methodList.withMetaAnnotation(Grpc.GrpcMethod.class)) {
             addServiceMethod(builder, am);
         }
     }
@@ -126,7 +125,7 @@ class GrpcClientBuilder extends AbstractServiceBuilder
      * @param method   the {@link io.helidon.microprofile.grpc.core.AnnotatedMethod} representing the method to add
      */
     private void addServiceMethod(ClientServiceDescriptor.Builder builder, AnnotatedMethod method) {
-        GrpcMethod annotation = method.firstAnnotationOrMetaAnnotation(GrpcMethod.class);
+        Grpc.GrpcMethod annotation = method.firstAnnotationOrMetaAnnotation(Grpc.GrpcMethod.class);
         String name = determineMethodName(method, annotation);
 
         MethodHandler handler = handlerSuppliers().stream()
@@ -187,8 +186,9 @@ class GrpcClientBuilder extends AbstractServiceBuilder
                     .responseType(responseType)
                     .methodHandler(methodHandler);
 
-            if (method.isAnnotationPresent(GrpcMarshaller.class)) {
-                config.marshallerSupplier(ModelHelper.getMarshallerSupplier(method.getAnnotation(GrpcMarshaller.class)));
+            if (method.isAnnotationPresent(Grpc.GrpcMarshaller.class)) {
+                config.marshallerSupplier(ModelHelper.getMarshallerSupplier(
+                        method.getAnnotation(Grpc.GrpcMarshaller.class)));
             }
         }
     }

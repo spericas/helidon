@@ -16,8 +16,7 @@
 
 package io.helidon.microprofile.grpc.client;
 
-import io.helidon.grpc.api.GrpcChannel;
-import io.helidon.grpc.api.GrpcProxy;
+import io.helidon.grpc.api.Grpc;
 import io.helidon.microprofile.grpc.core.ModelHelper;
 
 import io.grpc.Channel;
@@ -39,7 +38,7 @@ class GrpcProxyProducer {
     /**
      * A CDI producer method that produces a client proxy for a gRPC service that
      * will connect to the server using the channel specified via
-     * {@link io.helidon.grpc.api.GrpcChannel} annotation on the proxy interface
+     * {@link io.helidon.grpc.api.Grpc.GrpcChannel} annotation on the proxy interface
      * or injection point, or the default {@link io.grpc.Channel}.
      * <p>
      * This is not a real producer method but is used as a stub by the gRPC client
@@ -48,17 +47,17 @@ class GrpcProxyProducer {
      * @param injectionPoint the injection point where the client proxy is to be injected
      * @return a gRPC client proxy
      */
-    @GrpcProxy
-    @GrpcChannel(value = GrpcChannelsProvider.DEFAULT_CHANNEL_NAME)
+    @Grpc.GrpcProxy
+    @Grpc.GrpcChannel(value = GrpcChannelsProvider.DEFAULT_CHANNEL_NAME)
     static Object proxyUsingNamedChannel(InjectionPoint injectionPoint, ChannelProducer producer) {
         Class<?> type = ModelHelper.getGenericType(injectionPoint.getType());
 
         String channelName;
-        if (injectionPoint.getAnnotated().isAnnotationPresent(GrpcChannel.class)) {
-            channelName = injectionPoint.getAnnotated().getAnnotation(GrpcChannel.class).value();
+        if (injectionPoint.getAnnotated().isAnnotationPresent(Grpc.GrpcChannel.class)) {
+            channelName = injectionPoint.getAnnotated().getAnnotation(Grpc.GrpcChannel.class).value();
         } else {
-            channelName = type.isAnnotationPresent(GrpcChannel.class)
-                    ? type.getAnnotation(GrpcChannel.class).value()
+            channelName = type.isAnnotationPresent(Grpc.GrpcChannel.class)
+                    ? type.getAnnotation(Grpc.GrpcChannel.class).value()
                     : GrpcChannelsProvider.DEFAULT_CHANNEL_NAME;
         }
 
