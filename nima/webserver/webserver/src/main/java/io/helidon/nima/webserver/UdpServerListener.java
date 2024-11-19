@@ -82,13 +82,11 @@ class UdpServerListener extends ServerListener {
         this.readBuffer = ByteBuffer.allocate(BUFFER_SIZE);
 
         this.serverThread = Thread.ofPlatform()
-                .allowSetThreadLocals(true)
                 .inheritInheritableThreadLocals(true)
                 .daemon(false)
                 .name("udp-server-" + socketName + "-listener")
                 .unstarted(this::listen);
         this.handlerExecutor = Executors.newThreadPerTaskExecutor(Thread.ofVirtual()
-                .allowSetThreadLocals(true)
                 .inheritInheritableThreadLocals(false)
                 .factory());
 

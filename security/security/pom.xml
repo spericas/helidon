@@ -107,7 +107,7 @@
                 <artifactId>maven-compiler-plugin</artifactId>
                 <configuration>
                     <compilerArgs>
-                        <compilerArg>--enable-preview</compilerArg>
+                        <compilerArg></compilerArg>
                     </compilerArgs>
                     <annotationProcessorPaths>
                         <path>
@@ -128,7 +128,7 @@
                 <artifactId>maven-javadoc-plugin</artifactId>
                 <configuration>
                     <additionalOptions>
-                        <additionalOption>--enable-preview</additionalOption>
+                        <additionalOption></additionalOption>
                     </additionalOptions>
                 </configuration>
             </plugin>
