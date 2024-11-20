@@ -89,8 +89,16 @@ class LoomServer implements WebServer {
         Map<String, ServerListener> listenerMap = new HashMap<>();
         sockets.forEach((name, socketConfig) -> {
             Router socketRouter = featureContext.router(name);
-            listenerMap.put(name,
-                            new ServerListener(name,
+            listenerMap.put(name, socketConfig.udp()
+                                ? new UdpServerListener(name,
+                                               socketConfig,
+                                               socketRouter,
+                                               context,
+                                               idleConnectionTimer,
+                                               serverConfig.mediaContext().orElseGet(MediaContext::create),
+                                               serverConfig.contentEncoding().orElseGet(ContentEncodingContext::create),
+                                               serverConfig.directHandlers().orElseGet(DirectHandlers::create))
+                                : new ServerListener(name,
                                                socketConfig,
                                                socketRouter,
                                                context,

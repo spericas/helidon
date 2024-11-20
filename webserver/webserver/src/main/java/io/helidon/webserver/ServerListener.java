@@ -208,6 +208,10 @@ class ServerListener implements ListenerContext {
         return socketName + " (" + configuredAddress + ")";
     }
 
+    String socketName() {
+        return socketName;
+    }
+
     int port() {
         return connectedPort;
     }

@@ -41,6 +41,7 @@ import io.helidon.webserver.http.HttpRouting;
 import io.helidon.webserver.spi.ProtocolConfig;
 import io.helidon.webserver.spi.ProtocolConfigProvider;
 import io.helidon.webserver.spi.ServerConnectionSelector;
+import io.helidon.webserver.udp.UdpEndpoint;
 
 /**
  * Configuration of a server listener (server socket).
@@ -376,6 +377,22 @@ interface ListenerConfigBlueprint {
      */
     @Option.Configured("requested-uri-discovery")
     Optional<RequestedUriDiscoveryContext> requestedUriDiscoveryContext();
+
+    /**
+     * Indicates if socket is UDP.
+     *
+     * @return UDP socket flag
+     */
+    @Option.Configured
+    @Option.DefaultBoolean(false)
+    boolean udp();
+
+    /**
+     * Endpoint to use on a UDP socket. Requires {@link #udp()} set to {@code true}.
+     *
+     * @return UDP endpoint
+     */
+    Optional<UdpEndpoint> udpEndpoint();
 
     /**
      * Update the server socket with configured socket options.

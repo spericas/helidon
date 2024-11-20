@@ -47,6 +47,7 @@
         <module>webserver</module>
         <module>websocket</module>
         <module>concurrency-limits</module>
+        <module>udp</module>
     </modules>
 
     <profiles>
