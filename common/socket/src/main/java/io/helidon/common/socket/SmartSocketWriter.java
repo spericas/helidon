@@ -55,7 +55,7 @@ public class SmartSocketWriter extends SocketWriter {
                 asyncMode = false;
             }
         } else {
-            asyncWriter.drainQueue();
+            asyncWriter.drainQueueAndInterrupt();
             writeNow(buffer);       // blocking write
         }
     }

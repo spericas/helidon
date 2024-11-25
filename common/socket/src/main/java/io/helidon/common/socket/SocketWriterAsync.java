@@ -40,7 +40,7 @@ class SocketWriterAsync extends SocketWriter implements DataWriter {
     private final AtomicBoolean started = new AtomicBoolean(false);
     private volatile Throwable caught;
     private volatile boolean run = true;
-    private Thread thread;
+    private volatile Thread thread;
     private double avgQueueSize;
 
     /**
@@ -142,14 +142,20 @@ class SocketWriterAsync extends SocketWriter implements DataWriter {
             executor.submit(this::run);
         }
         if (!run) {
+
             throw new SocketWriterException(caught);
         }
     }
 
-    void drainQueue() {
-        BufferData buffer;
-        while ((buffer = writeQueue.poll()) != null) {
-            writeNow(buffer);
+    void drainQueueAndInterrupt() {
+        if (thread != null) {
+            thread.interrupt();
+            thread = null;
+
+            BufferData buffer;
+            while ((buffer = writeQueue.poll()) != null) {
+                writeNow(buffer);
+            }
         }
     }
 
