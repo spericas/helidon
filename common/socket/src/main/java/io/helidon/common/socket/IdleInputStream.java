@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023 Oracle and/or its affiliates.
+ * Copyright (c) 2023, 2025 Oracle and/or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,7 +20,6 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.UncheckedIOException;
 import java.util.Objects;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
@@ -105,6 +104,11 @@ class IdleInputStream extends InputStream {
         return closed;
     }
 
+    void endIdle() {
+        idlingThread.cancel(true);
+        idlingThread = null;
+    }
+
     private void handle() {
         try {
             next = upstream.read();
@@ -114,16 +118,6 @@ class IdleInputStream extends InputStream {
         } catch (IOException e) {
             closed = true;
             throw new UncheckedIOException(e);
-        }
-    }
-
-    private void endIdle() {
-        try {
-            idlingThread.get();
-            idlingThread = null;
-        } catch (InterruptedException | ExecutionException e) {
-            closed = true;
-            throw new RuntimeException("Exception in socket monitor thread.", e);
         }
     }
 }
