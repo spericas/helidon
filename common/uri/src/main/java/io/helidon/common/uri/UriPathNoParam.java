@@ -57,7 +57,7 @@ class UriPathNoParam implements UriPath {
 
     @Override
     public int hashCode() {
-        return Objects.hash(absolute, rawPath);
+        return rawPath.hashCode();
     }
 
     @Override

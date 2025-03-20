@@ -21,6 +21,8 @@ import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Callable;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 import java.util.function.Supplier;
 
 import io.helidon.common.Weights;
@@ -37,6 +39,8 @@ import io.helidon.webserver.WebServer;
 final class HttpRoutingImpl implements HttpRouting {
     private static final System.Logger LOGGER = System.getLogger(HttpRoutingImpl.class.getName());
     private static final HttpRoutingImpl EMPTY = builder().build();
+
+    private static final ConcurrentMap<HttpPrologue, RouteCrawler.CrawlerItem> CACHE = new ConcurrentHashMap<>();
 
     private final Filters filters;
     private final ServiceRoute rootRoute;
@@ -163,12 +167,25 @@ final class HttpRoutingImpl implements HttpRouting {
 
         private RoutingResult doRoute(ConnectionContext ctx, RoutingRequest request, RoutingResponse response) throws Exception {
             HttpPrologue prologue = request.prologue();
+
+            RouteCrawler.CrawlerItem cachedNext = CACHE.get(prologue);
+            if (cachedNext != null) {
+                response.resetRouting();
+                request.path(cachedNext.path());
+                cachedNext.handler().handle(request, response);
+                if (response.hasEntity()) {
+                    return RoutingResult.FINISH;
+                }
+            }
+
             RouteCrawler crawler = rootRoute.crawler(ctx, request);
 
             while (crawler.hasNext()) {
                 response.resetRouting();
                 RouteCrawler.CrawlerItem next = crawler.next();
                 request.path(next.path());
+
+                CACHE.put(prologue, next);
 
                 next.handler().handle(request, response);
                 if (response.shouldReroute()) {
