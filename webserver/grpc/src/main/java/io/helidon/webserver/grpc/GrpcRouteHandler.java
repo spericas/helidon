@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, 2024 Oracle and/or its affiliates.
+ * Copyright (c) 2022, 2025 Oracle and/or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -41,6 +41,11 @@ class GrpcRouteHandler<ReqT, ResT> extends GrpcRoute {
         this.method = method;
         this.pathMatcher = pathMatcher;
         this.callHandler = callHandler;
+    }
+
+    @Override
+    String serviceName() {
+        return method.getServiceName();
     }
 
     static <ReqT, ResT> GrpcRouteHandler<ReqT, ResT> unary(Descriptors.FileDescriptor proto,

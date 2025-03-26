@@ -120,6 +120,10 @@ public class GrpcRouting implements Routing {
         return null;
     }
 
+    List<GrpcRoute> routes() {
+        return routes;
+    }
+
     /**
      * Fluent API builder for {@link GrpcRouting}.
      */

@@ -49,4 +49,6 @@ module io.helidon.webserver.grpc {
             with io.helidon.webserver.grpc.GrpcProtocolProvider;
     provides io.helidon.webserver.spi.ProtocolConfigProvider
             with io.helidon.webserver.grpc.GrpcProtocolConfigProvider;
+    provides io.helidon.webserver.spi.ServerFeatureProvider
+            with io.helidon.webserver.grpc.GrpcReflectionFeatureProvider;
 }

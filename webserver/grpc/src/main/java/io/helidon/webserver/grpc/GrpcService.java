@@ -16,6 +16,8 @@
 
 package io.helidon.webserver.grpc;
 
+import java.io.InputStream;
+
 import com.google.protobuf.Descriptors;
 import io.grpc.stub.ServerCalls;
 
@@ -37,6 +39,18 @@ public interface GrpcService {
      */
     default String serviceName() {
         return getClass().getSimpleName();
+    }
+
+    /**
+     * Obtains a stream representation of the proto file used this
+     * gRPC service. This method must be implemented for reflection to
+     * work.
+     *
+     * @return stream representation of proto file or {@code null}.
+     * @see io.helidon.webserver.grpc.GrpcReflectionService
+     */
+    default InputStream protoFile() {
+        return null;
     }
 
     /**
