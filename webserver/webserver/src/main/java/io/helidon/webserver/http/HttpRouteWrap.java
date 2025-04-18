@@ -17,6 +17,7 @@
 package io.helidon.webserver.http;
 
 import io.helidon.http.HttpPrologue;
+import io.helidon.http.PathMatcher;
 import io.helidon.http.PathMatchers;
 import io.helidon.webserver.WebServer;
 
@@ -60,5 +61,10 @@ class HttpRouteWrap extends HttpRouteBase {
     @Override
     boolean isList() {
         return false;
+    }
+
+    @Override
+    public PathMatcher pathMatcher() {
+        return route.pathMatcher();
     }
 }

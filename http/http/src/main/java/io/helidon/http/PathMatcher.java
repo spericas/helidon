@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, 2023 Oracle and/or its affiliates.
+ * Copyright (c) 2022, 2025 Oracle and/or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -40,4 +40,14 @@ public interface PathMatcher {
      * @return match result
      */
     PathMatchers.PrefixMatchResult prefixMatch(UriPath uriPath);
+
+    /**
+     * Returns the matching element for this matcher. This could be a prefix, pattern,
+     * etc. depending on the type of matcher.
+     *
+     * @return matching element or {@code ""} if not defined
+     */
+    default String matchingElement() {
+        return "";
+    }
 }

@@ -94,6 +94,11 @@ class ServiceRoute extends HttpRouteBase implements HttpRoute {
         return true;
     }
 
+    @Override
+    public PathMatcher pathMatcher() {
+        return pathMatcher;
+    }
+
     RouteCrawler crawler(ConnectionContext ctx, RoutingRequest request) {
         return new RouteCrawler(ctx, request, routes);
     }

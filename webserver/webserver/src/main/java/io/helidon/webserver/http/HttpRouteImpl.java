@@ -50,6 +50,11 @@ class HttpRouteImpl extends HttpRouteBase implements HttpRoute {
     }
 
     @Override
+    public PathMatcher pathMatcher() {
+        return pathMatcher;
+    }
+
+    @Override
     public void beforeStart() {
         handler.beforeStart();
     }

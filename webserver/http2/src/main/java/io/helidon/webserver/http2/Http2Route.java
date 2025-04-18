@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, 2023 Oracle and/or its affiliates.
+ * Copyright (c) 2022, 2025 Oracle and/or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -80,5 +80,10 @@ public class Http2Route implements HttpRoute {
     @Override
     public void afterStop() {
         handler.afterStop();
+    }
+
+    @Override
+    public PathMatcher pathMatcher() {
+        return pathMatcher;
     }
 }

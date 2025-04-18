@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, 2023 Oracle and/or its affiliates.
+ * Copyright (c) 2022, 2025 Oracle and/or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -111,7 +111,8 @@ class RouteCrawler {
             } else {
                 PathMatchers.MatchResult accepts = nextRoute.accepts(prologue);
                 if (accepts.accepted()) {
-                    next = new CrawlerItem(accepts.path(), nextRoute.handler());
+                    String matchingElement = nextRoute.pathMatcher().matchingElement();
+                    next = new CrawlerItem(accepts.path(), matchingElement, nextRoute.handler());
 
                     if (parent != null) {
                         next = next.parent(parent);
@@ -131,7 +132,7 @@ class RouteCrawler {
         return result;
     }
 
-    record CrawlerItem(RoutedPath path, Handler handler) {
+    record CrawlerItem(RoutedPath path, String matchingElement, Handler handler) {
         public CrawlerItem parent(RoutedPath parent) {
             Map<String, List<String>> newParams = new HashMap<>();
 
@@ -144,17 +145,20 @@ class RouteCrawler {
                 newParams.put(paramName, params.all(paramName));
             }
             newParams.replaceAll((name, values) -> List.copyOf(values));
-            RoutedPath result = new CrawlerRoutedPath(path, Parameters.create("http/path", newParams));
-            return new CrawlerItem(result, handler);
+            RoutedPath result = new CrawlerRoutedPath(path, matchingElement, Parameters.create("http/path", newParams));
+            return new CrawlerItem(result, parent.path() + matchingElement, handler);
         }
 
         private static final class CrawlerRoutedPath implements RoutedPath {
             private final UriPath path;
             private final Parameters templateParams;
+            private final String matchingElement;
 
             private CrawlerRoutedPath(UriPath path,
+                                      String matchingElement,
                                       Parameters templateParams) {
                 this.path = path;
+                this.matchingElement = matchingElement;
                 this.templateParams = templateParams;
             }
 
@@ -190,7 +194,12 @@ class RouteCrawler {
 
             @Override
             public RoutedPath absolute() {
-                return new CrawlerRoutedPath(path.absolute(), templateParams);
+                return new CrawlerRoutedPath(path.absolute(), matchingElement, templateParams);
+            }
+
+            @Override
+            public String matchingElement() {
+                return matchingElement;
             }
         }
     }
