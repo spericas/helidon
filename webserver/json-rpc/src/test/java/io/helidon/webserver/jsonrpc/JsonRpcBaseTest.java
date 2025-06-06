@@ -125,6 +125,7 @@ class JsonRpcBaseTest {
                            JsonRpcHandlers.builder()
                                    .method("start", this::start)
                                    .method("stop", this::stop)
+                                   .error(this::error)
                                    .build());
         }
 
@@ -153,6 +154,15 @@ class JsonRpcBaseTest {
                                   .data(new ErrorData("Bad param"))
                                   .build());
                 res.status(Status.OK_200).send();
+            }
+        }
+
+        boolean error(JsonObject object) {
+            try {
+                String method = object.getString("method");
+                return "expected".equalsIgnoreCase(method);
+            } catch (Exception e) {
+                return false;       // not handled
             }
         }
     }
