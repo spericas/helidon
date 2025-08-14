@@ -17,7 +17,6 @@
 package io.helidon.common.uri;
 
 import java.net.URI;
-import java.net.URISyntaxException;
 
 import io.helidon.builder.api.Option;
 import io.helidon.builder.api.Prototype;
@@ -96,14 +95,6 @@ interface UriInfoBlueprint {
      * @return a new URI
      */
     default URI toUri() {
-        try {
-            return new URI(scheme(),
-                           authority(),
-                           path().path(),
-                           query().isEmpty() ? null : query().value(),
-                           fragment().hasValue() ? fragment().value() : null);
-        } catch (URISyntaxException e) {
-            throw new IllegalArgumentException("UriInfo cannot be used to create a URI: " + this, e);
-        }
+        return URI.create(toString());
     }
 }

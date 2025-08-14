@@ -19,6 +19,7 @@ package io.helidon.common.uri;
 import java.net.URI;
 import java.util.stream.Stream;
 
+import org.hamcrest.core.Is;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
@@ -43,6 +44,7 @@ class UriInfoTest {
                 () -> assertThat(uriInfo.toUri(), is(URI.create("http://localhost:80/")))
         );
     }
+
     @Test
     void testFullyCustomized() {
         UriInfo uriInfo = UriInfo.builder()
@@ -70,6 +72,7 @@ class UriInfoTest {
                 () -> assertThat(uriInfo.toUri(), is(uri))
         );
     }
+
     @ParameterizedTest
     @MethodSource("authorities")
     void testAuthority(AuthorityData data) {
@@ -103,5 +106,45 @@ class UriInfoTest {
     }
 
     private record AuthorityData(String authority, String expectedAuthority, String expectedHost, int expectedPort) {
+    }
+
+    @Test
+    void testToUriWithQueryString() {
+        UriQueryWriteable query = UriQueryWriteable.create();
+        query.fromQueryString("a=1%202");
+        assertThat(query.value(), Is.is("a=1 2"));
+        assertThat(query.rawValue(), Is.is("a=1%202"));
+
+        UriInfo uriInfo = UriInfo.builder()
+                .scheme("https")
+                .host("helidon.io")
+                .port(447)
+                .path("/docs")
+                .query(query)
+                .build();
+
+        URI uri = uriInfo.toUri();
+        assertThat(uri.getQuery(), is("a=1 2"));
+        assertThat(uri.getRawQuery(), is("a=1%202"));
+    }
+
+    @Test
+    void testToUriEqualsWithQueryString() {
+        UriQueryWriteable query = UriQueryWriteable.create();
+        query.fromQueryString("a=1%3D2");
+        assertThat(query.value(), Is.is("a=1=2"));
+        assertThat(query.rawValue(), Is.is("a=1%3D2"));
+
+        UriInfo uriInfo = UriInfo.builder()
+                .scheme("https")
+                .host("helidon.io")
+                .port(447)
+                .path("/docs")
+                .query(query)
+                .build();
+
+        URI uri = uriInfo.toUri();
+        assertThat(uri.getQuery(), is("a=1=2"));
+        assertThat(uri.getRawQuery(), is("a=1%3D2"));
     }
 }
