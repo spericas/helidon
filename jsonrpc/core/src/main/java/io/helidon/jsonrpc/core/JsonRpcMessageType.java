@@ -13,18 +13,25 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package io.helidon.jsonrpc.core;
 
 /**
- * Helidon JSON-RPC core support. See
- * <a href="https://www.jsonrpc.org/specification">JSON-RPC 2.0 Specification</a>.
+ * All possible JSON-RPC message types.
  */
-module io.helidon.jsonrpc.core {
+public enum JsonRpcMessageType {
 
-    requires io.helidon.common;
-    requires jakarta.json;
-    requires jakarta.json.bind;
-    requires io.helidon.common.features.api;
-    requires io.helidon.builder.api;
+    /**
+     * A message of type request.
+     */
+    REQUEST,
 
-    exports io.helidon.jsonrpc.core;
+    /**
+     * A message of type response.
+     */
+    RESPONSE,
+
+    /**
+     * A message of type notification.
+     */
+    NOTIFICATION
 }

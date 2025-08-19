@@ -13,18 +13,25 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package io.helidon.webserver.jsonrpc;
 
-/**
- * Helidon JSON-RPC core support. See
- * <a href="https://www.jsonrpc.org/specification">JSON-RPC 2.0 Specification</a>.
- */
-module io.helidon.jsonrpc.core {
+import java.util.Optional;
 
-    requires io.helidon.common;
-    requires jakarta.json;
-    requires jakarta.json.bind;
-    requires io.helidon.common.features.api;
-    requires io.helidon.builder.api;
+import io.helidon.jsonrpc.core.JsonRpcMessage;
 
-    exports io.helidon.jsonrpc.core;
+import jakarta.json.JsonValue;
+
+class JsonRpcNotificationImpl extends JsonRpcRequestImpl {
+
+    JsonRpcNotificationImpl(JsonRpcMessage message) {
+        super(message);
+        if (message.rpcId().isPresent()) {
+            throw new IllegalArgumentException("A JSON-RPC notification cannot include an ID");
+        }
+    }
+
+    @Override
+    public Optional<JsonValue> rpcId() {
+        return Optional.empty();
+    }
 }

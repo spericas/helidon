@@ -20,14 +20,17 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.function.UnaryOperator;
 
+import io.helidon.common.GenericType;
 import io.helidon.common.uri.UriQuery;
 import io.helidon.http.Header;
 import io.helidon.http.ServerResponseHeaders;
 import io.helidon.http.ServerResponseTrailers;
 import io.helidon.http.Status;
 import io.helidon.jsonrpc.core.JsonRpcError;
+import io.helidon.jsonrpc.core.JsonRpcMessage;
 import io.helidon.jsonrpc.core.JsonUtil;
 import io.helidon.webserver.http.ServerResponse;
+import io.helidon.webserver.http.spi.Sink;
 
 import jakarta.json.JsonObject;
 import jakarta.json.JsonObjectBuilder;
@@ -50,6 +53,13 @@ class JsonRpcResponseImpl implements JsonRpcResponse {
     JsonRpcResponseImpl(JsonValue rpcId, ServerResponse delegate) {
         this.rpcId = rpcId;
         this.delegate = Objects.requireNonNull(delegate);
+    }
+
+    JsonRpcResponseImpl(JsonValue rpcId, JsonRpcMessage message) {
+        this.rpcId = rpcId;
+        this.delegate = null;
+        message.result().ifPresent(this::result);
+        message.error().ifPresent(e -> this.error = e);
     }
 
     @Override
@@ -134,71 +144,84 @@ class JsonRpcResponseImpl implements JsonRpcResponse {
 
     @Override
     public ServerResponse header(Header header) {
-        return delegate.header(header);
+        return delegate().header(header);
     }
 
     @Override
     public void send(byte[] bytes) {
-        delegate.send(bytes);
+        delegate().send(bytes);
     }
 
     @Override
     public void send(Object entity) {
-        delegate.send(entity);
+        delegate().send(entity);
     }
 
     @Override
     public boolean isSent() {
-        return delegate.isSent();
+        return delegate().isSent();
     }
 
     @Override
     public OutputStream outputStream() {
-        return delegate.outputStream();
+        return delegate().outputStream();
     }
 
     @Override
     public long bytesWritten() {
-        return delegate.bytesWritten();
+        return delegate().bytesWritten();
     }
 
     @Override
     public ServerResponse whenSent(Runnable listener) {
-        return delegate.whenSent(listener);
+        return delegate().whenSent(listener);
     }
 
     @Override
     public ServerResponse reroute(String newPath) {
-        return delegate.reroute(newPath);
+        return delegate().reroute(newPath);
     }
 
     @Override
     public ServerResponse reroute(String path, UriQuery query) {
-        return delegate.reroute(path, query);
+        return delegate().reroute(path, query);
     }
 
     @Override
     public ServerResponse next() {
-        return delegate.next();
+        return delegate().next();
     }
 
     @Override
     public ServerResponseHeaders headers() {
-        return delegate.headers();
+        return delegate().headers();
     }
 
     @Override
     public ServerResponseTrailers trailers() {
-        return delegate.trailers();
+        return delegate().trailers();
     }
 
     @Override
     public void streamResult(String result) {
-        delegate.streamResult(result);
+        delegate().streamResult(result);
     }
 
     @Override
     public void streamFilter(UnaryOperator<OutputStream> filterFunction) {
-        delegate.streamFilter(filterFunction);
+        delegate().streamFilter(filterFunction);
+    }
+
+    @Override
+    public <T extends Sink<?>> T sink(GenericType<T> sinkType) {
+        return delegate().sink(sinkType);
+    }
+
+    private ServerResponse delegate() {
+        if (delegate == null) {
+            throw new IllegalStateException("Delegate is null");
+        }
+        return delegate;
     }
 }
+

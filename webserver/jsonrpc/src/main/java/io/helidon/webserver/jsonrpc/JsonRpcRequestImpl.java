@@ -15,6 +15,8 @@
  */
 package io.helidon.webserver.jsonrpc;
 
+import java.math.BigDecimal;
+import java.math.BigInteger;
 import java.util.Optional;
 
 import io.helidon.common.socket.PeerInfo;
@@ -24,10 +26,14 @@ import io.helidon.common.uri.UriQuery;
 import io.helidon.http.Header;
 import io.helidon.http.HttpPrologue;
 import io.helidon.http.ServerRequestHeaders;
+import io.helidon.jsonrpc.core.JsonRpcMessage;
+import io.helidon.jsonrpc.core.JsonRpcMessageType;
 import io.helidon.jsonrpc.core.JsonRpcParams;
+import io.helidon.jsonrpc.core.JsonUtil;
 import io.helidon.webserver.http.HttpRequest;
 
 import jakarta.json.JsonObject;
+import jakarta.json.JsonObjectBuilder;
 import jakarta.json.JsonStructure;
 import jakarta.json.JsonValue;
 
@@ -42,6 +48,55 @@ class JsonRpcRequestImpl implements JsonRpcRequest {
     JsonRpcRequestImpl(HttpRequest delegate, JsonObject request) {
         this.delegate = delegate;
         this.request = request;
+    }
+
+    JsonRpcRequestImpl(JsonRpcMessage message) {
+        this.delegate = null;
+        JsonObjectBuilder builder = JsonUtil.JSON_BUILDER_FACTORY.createObjectBuilder();
+        builder.add("jsonrpc", "2.0");
+        builder.add("method", message.rpcMethod());
+
+        // set the id using for a request using proper conversions
+        if (message.type() == JsonRpcMessageType.REQUEST) {
+            Object id = message.rpcId().orElseThrow(
+                    () -> new IllegalArgumentException("Missing JSON-RPC ID"));
+            if (id == null) {
+                builder.add("id", JsonValue.EMPTY_JSON_OBJECT);
+            } else {
+                switch (id) {
+                case String s -> builder.add("id", s);
+                case Integer i -> builder.add("id", i);
+                case JsonValue jsonValue -> builder.add("id", jsonValue);
+                case Double v -> builder.add("id", v);
+                case BigDecimal bigDecimal -> builder.add("id", bigDecimal);
+                case BigInteger bigInteger -> builder.add("id", bigInteger);
+                default -> throw new IllegalArgumentException("Invalid JSON-RPC ID " + id);
+                }
+            }
+        }
+
+        // set the params using proper conversions
+        if (message.param().isPresent()) {
+            builder.add("params", message.param().get());
+        } else if (!message.params().isEmpty()) {
+            JsonObjectBuilder paramBuilder = JsonUtil.JSON_BUILDER_FACTORY.createObjectBuilder();
+            message.params().forEach((key, value) -> {
+                switch (value) {
+                case String s -> paramBuilder.add(key, s);
+                case Integer i -> paramBuilder.add(key, i);
+                case Boolean b -> paramBuilder.add(key, b);
+                case JsonValue jsonValue -> paramBuilder.add(key, jsonValue);
+                case Double v -> paramBuilder.add(key, v);
+                case BigDecimal bigDecimal -> paramBuilder.add(key, bigDecimal);
+                case BigInteger bigInteger -> paramBuilder.add(key, bigInteger);
+                default -> paramBuilder.add(key, JsonUtil.jsonbToJsonp(value));
+                }
+            });
+            builder.add("params", paramBuilder.build());
+        }
+
+        // build and set request
+        this.request = builder.build();
     }
 
     @Override

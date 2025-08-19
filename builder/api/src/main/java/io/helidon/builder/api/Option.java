@@ -230,7 +230,7 @@ public final class Option {
          *
          * @return prototype option default value (String)
          */
-        String[] value();
+        io.helidon.jsonrpc.core.JsonRpcMessageBlueprint.Type value();
     }
 
     /**
