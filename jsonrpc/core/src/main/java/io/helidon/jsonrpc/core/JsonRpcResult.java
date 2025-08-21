@@ -17,6 +17,7 @@ package io.helidon.jsonrpc.core;
 
 import java.util.Optional;
 
+import jakarta.json.Json;
 import jakarta.json.JsonArray;
 import jakarta.json.JsonObject;
 import jakarta.json.JsonValue;
@@ -34,6 +35,16 @@ public interface JsonRpcResult {
      */
     static JsonRpcResult create(JsonValue result) {
         return new JsonRpcResultImpl(result);
+    }
+
+    /**
+     * Create an instance from a string.
+     *
+     * @param result the value
+     * @return a new instance of this class
+     */
+    static JsonRpcResult create(String result) {
+        return new JsonRpcResultImpl(Json.createValue(result));
     }
 
     /**

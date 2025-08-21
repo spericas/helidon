@@ -15,11 +15,16 @@
  */
 package io.helidon.jsonrpc.core;
 
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 
 import jakarta.json.JsonArray;
+import jakarta.json.JsonArrayBuilder;
 import jakarta.json.JsonObject;
+import jakarta.json.JsonObjectBuilder;
 import jakarta.json.JsonString;
 import jakarta.json.JsonStructure;
 import jakarta.json.JsonValue;
@@ -29,30 +34,25 @@ import jakarta.json.JsonValue;
  */
 class JsonRpcParamsImpl implements JsonRpcParams {
 
-    private final JsonStructure params;
+    private final ArrayList<JsonValue> arrayParams = new ArrayList<>();
+    private final Map<String, JsonValue> mapParams = new HashMap<>();
+
+    JsonRpcParamsImpl() {
+    }
 
     JsonRpcParamsImpl(JsonStructure params) {
-        this.params = Objects.requireNonNull(params);
-    }
-
-    @Override
-    public JsonStructure asJsonStructure() {
-        return params;
-    }
-
-    @Override
-    public JsonObject asJsonObject() {
-        return params.asJsonObject();
-    }
-
-    @Override
-    public JsonArray asJsonArray() {
-        return params.asJsonArray();
+        if (params instanceof JsonObject object) {
+            mapParams.putAll(object);
+        } else if (params instanceof JsonArray array) {
+            arrayParams.addAll(array);
+        } else {
+            throw new IllegalArgumentException("Invalid params in JsonRpcParamsImpl");
+        }
     }
 
     @Override
     public JsonValue get(String name) {
-        JsonValue value = asJsonObject().get(name);
+        JsonValue value = mapParams.get(name);
         if (value == null) {
             throw new IllegalArgumentException("Unable to find param " + name);
         }
@@ -66,12 +66,18 @@ class JsonRpcParamsImpl implements JsonRpcParams {
 
     @Override
     public Optional<JsonValue> find(String name) {
-        return Optional.ofNullable(asJsonObject().get(name));
+        return Optional.ofNullable(mapParams.get(name));
+    }
+
+    @Override
+    public JsonRpcParams put(String name, JsonValue value) {
+        mapParams.put(name, value);
+        return this;
     }
 
     @Override
     public JsonValue get(int index) {
-        return asJsonArray().get(index);
+        return arrayParams.get(index);
     }
 
     @Override
@@ -81,15 +87,56 @@ class JsonRpcParamsImpl implements JsonRpcParams {
 
     @Override
     public Optional<JsonValue> find(int index) {
-        JsonArray array = asJsonArray();
-        if (index >= 0 && index < array.size()) {
-            return Optional.of(array.get(index));
+        if (index >= 0 && index < arrayParams.size()) {
+            return Optional.of(arrayParams.get(index));
         }
         return Optional.empty();
     }
 
     @Override
+    public JsonRpcParams put(int index, JsonValue value) {
+        arrayParams.add(index, value);
+        return this;
+    }
+
+    @Override
     public <T> T as(Class<T> type) {
         return JsonUtil.jsonpToJsonb(asJsonObject(), type);
+    }
+
+    @Override
+    public JsonStructure asJsonStructure() {
+        return !arrayParams.isEmpty() ? asJsonArray() : asJsonObject();
+    }
+
+    @Override
+    public JsonObject asJsonObject() {
+        JsonObjectBuilder builder = JsonUtil.JSON_BUILDER_FACTORY.createObjectBuilder();
+        for (Map.Entry<String, JsonValue> entry : mapParams.entrySet()) {
+            builder.add(entry.getKey(), entry.getValue());
+        }
+        return builder.build();
+    }
+
+    @Override
+    public JsonArray asJsonArray() {
+        JsonArrayBuilder builder = JsonUtil.JSON_BUILDER_FACTORY.createArrayBuilder();
+        for (JsonValue value : arrayParams) {
+            builder.add(value);
+        }
+        return builder.build();
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (!(o instanceof JsonRpcParamsImpl that)) {
+            return false;
+        }
+        return Objects.equals(arrayParams, that.arrayParams) && Objects.equals(mapParams, that.mapParams);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(arrayParams, mapParams);
     }
 }

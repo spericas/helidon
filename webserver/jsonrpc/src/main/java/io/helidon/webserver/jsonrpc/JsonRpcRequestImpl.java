@@ -24,11 +24,11 @@ import io.helidon.common.uri.UriQuery;
 import io.helidon.http.Header;
 import io.helidon.http.HttpPrologue;
 import io.helidon.http.ServerRequestHeaders;
+import io.helidon.jsonrpc.core.JsonRpcMessageRequest;
 import io.helidon.jsonrpc.core.JsonRpcParams;
 import io.helidon.webserver.http.HttpRequest;
 
 import jakarta.json.JsonObject;
-import jakarta.json.JsonStructure;
 import jakarta.json.JsonValue;
 
 /**
@@ -36,90 +36,106 @@ import jakarta.json.JsonValue;
  */
 class JsonRpcRequestImpl implements JsonRpcRequest {
 
-    private final HttpRequest delegate;
-    private final JsonObject request;
+    private final HttpRequest requestDelegate;
+    private final JsonRpcMessageRequest messageDelegate;
 
     JsonRpcRequestImpl(HttpRequest delegate, JsonObject request) {
-        this.delegate = delegate;
-        this.request = request;
+        this.requestDelegate = delegate;
+        this.messageDelegate = JsonRpcMessageRequest.create(request);
     }
 
     @Override
-    public String version() {
-        return request.getString("jsonrpc");
+    public JsonRpcMessageRequest rpcId(JsonValue rpcId) {
+        return messageDelegate.rpcId(rpcId);
     }
 
     @Override
-    public String rpcMethod() {
-        return request.getString("method");
+    public JsonRpcMessageRequest rpcId(int rpcId) {
+        return messageDelegate.rpcId(rpcId);
     }
 
     @Override
-    public Optional<JsonValue> rpcId() {
-        return Optional.ofNullable(request.get("id"));
+    public JsonRpcMessageRequest rpcId(String rpcId) {
+        return messageDelegate.rpcId(rpcId);
+    }
+
+    @Override
+    public JsonRpcMessageRequest rpcMethod(String rpcMethod) {
+        return messageDelegate.rpcMethod(rpcMethod);
     }
 
     @Override
     public JsonRpcParams params() {
-        JsonValue value = request.get("params");
-        if (value == null) {
-            value = JsonValue.EMPTY_JSON_OBJECT;
-        }
-        return JsonRpcParams.create((JsonStructure) value);
+        return messageDelegate.params();
+    }
+
+    @Override
+    public String version() {
+        return messageDelegate.version();
+    }
+
+    @Override
+    public String rpcMethod() {
+        return messageDelegate.rpcMethod();
+    }
+
+    @Override
+    public Optional<JsonValue> rpcId() {
+        return messageDelegate.rpcId();
     }
 
     @Override
     public JsonObject asJsonObject() {
-        return request;
+        return messageDelegate.asJsonObject();
     }
 
     @Override
     public HttpPrologue prologue() {
-        return delegate.prologue();
+        return requestDelegate.prologue();
     }
 
     @Override
     public ServerRequestHeaders headers() {
-        return delegate.headers();
+        return requestDelegate.headers();
     }
 
     @Override
     public UriPath path() {
-        return delegate.path();
+        return requestDelegate.path();
     }
 
     @Override
     public UriQuery query() {
-        return delegate.query();
+        return requestDelegate.query();
     }
 
     @Override
     public PeerInfo remotePeer() {
-        return delegate.remotePeer();
+        return requestDelegate.remotePeer();
     }
 
     @Override
     public PeerInfo localPeer() {
-        return delegate.localPeer();
+        return requestDelegate.localPeer();
     }
 
     @Override
     public String authority() {
-        return delegate.authority();
+        return requestDelegate.authority();
     }
 
     @Override
     public void header(Header header) {
-        delegate.header(header);
+        requestDelegate.header(header);
     }
 
     @Override
     public int id() {
-        return delegate.id();
+        return requestDelegate.id();
     }
 
     @Override
     public UriInfo requestedUri() {
-        return delegate.requestedUri();
+        return requestDelegate.requestedUri();
     }
 }

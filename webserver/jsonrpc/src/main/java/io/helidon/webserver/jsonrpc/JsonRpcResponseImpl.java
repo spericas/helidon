@@ -26,57 +26,98 @@ import io.helidon.http.ServerResponseHeaders;
 import io.helidon.http.ServerResponseTrailers;
 import io.helidon.http.Status;
 import io.helidon.jsonrpc.core.JsonRpcError;
-import io.helidon.jsonrpc.core.JsonUtil;
+import io.helidon.jsonrpc.core.JsonRpcMessageResponse;
+import io.helidon.jsonrpc.core.JsonRpcResult;
 import io.helidon.webserver.http.ServerResponse;
 
 import jakarta.json.JsonObject;
-import jakarta.json.JsonObjectBuilder;
 import jakarta.json.JsonValue;
-
-import static io.helidon.jsonrpc.core.JsonUtil.JSON_BUILDER_FACTORY;
 
 /**
  * An implementation of JSON-RPC response.
  */
 class JsonRpcResponseImpl implements JsonRpcResponse {
 
-    private final ServerResponse delegate;
+    private final ServerResponse responseDelegate;
+    private final JsonRpcMessageResponse messageDelegate;
 
-    private JsonValue rpcId;
-    private JsonValue result;
-    private JsonRpcError error;
     private Status status = Status.OK_200;
 
     JsonRpcResponseImpl(JsonValue rpcId, ServerResponse delegate) {
-        this.rpcId = rpcId;
-        this.delegate = Objects.requireNonNull(delegate);
+        this.responseDelegate = Objects.requireNonNull(delegate);
+        this.messageDelegate = JsonRpcMessageResponse.create(rpcId);
     }
 
     @Override
     public JsonRpcResponse rpcId(JsonValue rpcId) {
-        this.rpcId = rpcId;
+        messageDelegate.rpcId(rpcId);
+        return this;
+    }
+
+    @Override
+    public JsonRpcResponse rpcId(int rpcId) {
+        messageDelegate.rpcId(rpcId);
+        return this;
+    }
+
+    @Override
+    public JsonRpcResponse rpcId(String rpcId) {
+        messageDelegate.rpcId(rpcId);
         return this;
     }
 
     @Override
     public JsonRpcResponse result(JsonValue result) {
-        this.result = result;
+        messageDelegate.result(result);
         return this;
     }
 
     @Override
+    public JsonRpcResponse result(Object object) {
+        messageDelegate.result(object);
+        return this;
+    }
+
+    @Override
+    public JsonRpcMessageResponse result(JsonRpcResult result) {
+        return messageDelegate.result(result);
+    }
+
+    @Override
     public JsonRpcResponse error(int code, String message) {
-        Objects.requireNonNull(message, "message is null");
-        error = JsonRpcError.create(code, message);
+        messageDelegate.error(code, message);
         return this;
     }
 
     @Override
     public JsonRpcResponse error(int code, String message, JsonValue data) {
-        Objects.requireNonNull(message, "message is null");
-        Objects.requireNonNull(data, "data is null");
-        error = JsonRpcError.create(code, message, data);
+        messageDelegate.error(code, message, data);
         return this;
+    }
+
+    @Override
+    public JsonRpcMessageResponse error(JsonRpcError error) {
+        return messageDelegate.error(error);
+    }
+
+    @Override
+    public Optional<JsonValue> rpcId() {
+        return messageDelegate.rpcId();
+    }
+
+    @Override
+    public Optional<JsonRpcResult> result() {
+        return messageDelegate.result();
+    }
+
+    @Override
+    public Optional<JsonRpcError> error() {
+        return messageDelegate.error();
+    }
+
+    @Override
+    public JsonObject asJsonObject() {
+        return messageDelegate.asJsonObject();
     }
 
     @Override
@@ -86,25 +127,9 @@ class JsonRpcResponseImpl implements JsonRpcResponse {
     }
 
     @Override
-    public JsonRpcResponse result(Object object) {
-        result = JsonUtil.jsonbToJsonp(object);
+    public JsonRpcResponse status(Status status) {
+        this.status = status;
         return this;
-    }
-
-    @Override
-    public Optional<JsonValue> rpcId() {
-        return Optional.ofNullable(rpcId);
-    }
-
-    @Override
-    public Optional<JsonValue> result() {
-        return Optional.ofNullable(result);
-    }
-
-
-    @Override
-    public Optional<JsonRpcError> error() {
-        return Optional.ofNullable(error);
     }
 
     @Override
@@ -118,87 +143,72 @@ class JsonRpcResponseImpl implements JsonRpcResponse {
     }
 
     @Override
-    public JsonObject asJsonObject() {
-        JsonObjectBuilder builder = JSON_BUILDER_FACTORY.createObjectBuilder()
-                .add("jsonrpc", "2.0");
-        if (rpcId != null) {
-            builder.add("id", rpcId);
-        }
-        if (result != null) {
-            builder.add("result", result);
-        } else if (error != null) {
-            builder.add("error", error.asJsonObject());
-        }
-        return builder.build();
-    }
-
-    @Override
     public ServerResponse header(Header header) {
-        return delegate.header(header);
+        return responseDelegate.header(header);
     }
 
     @Override
     public void send(byte[] bytes) {
-        delegate.send(bytes);
+        responseDelegate.send(bytes);
     }
 
     @Override
     public void send(Object entity) {
-        delegate.send(entity);
+        responseDelegate.send(entity);
     }
 
     @Override
     public boolean isSent() {
-        return delegate.isSent();
+        return responseDelegate.isSent();
     }
 
     @Override
     public OutputStream outputStream() {
-        return delegate.outputStream();
+        return responseDelegate.outputStream();
     }
 
     @Override
     public long bytesWritten() {
-        return delegate.bytesWritten();
+        return responseDelegate.bytesWritten();
     }
 
     @Override
     public ServerResponse whenSent(Runnable listener) {
-        return delegate.whenSent(listener);
+        return responseDelegate.whenSent(listener);
     }
 
     @Override
     public ServerResponse reroute(String newPath) {
-        return delegate.reroute(newPath);
+        return responseDelegate.reroute(newPath);
     }
 
     @Override
     public ServerResponse reroute(String path, UriQuery query) {
-        return delegate.reroute(path, query);
+        return responseDelegate.reroute(path, query);
     }
 
     @Override
     public ServerResponse next() {
-        return delegate.next();
+        return responseDelegate.next();
     }
 
     @Override
     public ServerResponseHeaders headers() {
-        return delegate.headers();
+        return responseDelegate.headers();
     }
 
     @Override
     public ServerResponseTrailers trailers() {
-        return delegate.trailers();
+        return responseDelegate.trailers();
     }
 
     @Override
     public void streamResult(String result) {
-        delegate.streamResult(result);
+        responseDelegate.streamResult(result);
     }
 
     @Override
     public void streamFilter(UnaryOperator<OutputStream> filterFunction) {
-        delegate.streamFilter(filterFunction);
+        responseDelegate.streamFilter(filterFunction);
     }
 }

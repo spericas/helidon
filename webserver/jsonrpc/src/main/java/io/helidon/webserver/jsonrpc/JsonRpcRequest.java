@@ -15,52 +15,11 @@
  */
 package io.helidon.webserver.jsonrpc;
 
-import java.util.Optional;
-
-import io.helidon.jsonrpc.core.JsonRpcParams;
+import io.helidon.jsonrpc.core.JsonRpcMessageRequest;
 import io.helidon.webserver.http.HttpRequest;
-
-import jakarta.json.JsonObject;
-import jakarta.json.JsonValue;
 
 /**
  * A representation of a JSON-RPC request.
  */
-public interface JsonRpcRequest extends HttpRequest {
-
-    /**
-     * The request version. Always "2.0".
-     *
-     * @return the request version
-     */
-    String version();
-
-    /**
-     * The JSON-RPC request method name.
-     *
-     * @return the request method
-     */
-    String rpcMethod();
-
-    /**
-     * The JSON-RPC request ID, if present.
-     *
-     * @return an optional request ID
-     */
-    Optional<JsonValue> rpcId();
-
-    /**
-     * The params associated with the request. If omitted in the request, then
-     * internally initialized using {@link JsonValue#EMPTY_JSON_OBJECT}.
-     *
-     * @return the params
-     */
-    JsonRpcParams params();
-
-    /**
-     * Get a complete request as a JSON object.
-     *
-     * @return a JSON object that represents the request
-     */
-    JsonObject asJsonObject();
+public interface JsonRpcRequest extends JsonRpcMessageRequest, HttpRequest {
 }

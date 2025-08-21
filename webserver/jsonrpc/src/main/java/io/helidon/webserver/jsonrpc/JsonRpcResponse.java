@@ -15,89 +15,36 @@
  */
 package io.helidon.webserver.jsonrpc;
 
-import java.util.Optional;
-
 import io.helidon.http.Status;
-import io.helidon.jsonrpc.core.JsonRpcError;
+import io.helidon.jsonrpc.core.JsonRpcMessageResponse;
 import io.helidon.webserver.http.ServerResponse;
 
-import jakarta.json.Json;
-import jakarta.json.JsonObject;
 import jakarta.json.JsonValue;
 
 /**
  * A representation of a JSON-RPC response.
  */
-public interface JsonRpcResponse extends ServerResponse {
+public interface JsonRpcResponse extends JsonRpcMessageResponse, ServerResponse {
 
-    /**
-     * Set a JSON-RPC ID for this response.
-     *
-     * @param rpcId the ID
-     * @return this response
-     */
+    @Override
     JsonRpcResponse rpcId(JsonValue rpcId);
 
-    /**
-     * Set a JSON-RPC ID for this response as an int.
-     *
-     * @param rpcId the ID
-     * @return this response
-     */
-    default JsonRpcResponse rpcId(int rpcId) {
-        return rpcId(Json.createValue(rpcId));
-    }
+    @Override
+    JsonRpcResponse rpcId(int rpcId);
 
-    /**
-     * Set a JSON-RPC ID for this response as a string.
-     *
-     * @param rpcId the ID
-     * @return this response
-     */
-    default JsonRpcResponse rpcId(String rpcId) {
-        return rpcId(Json.createValue(rpcId));
-    }
+    @Override
+    JsonRpcResponse rpcId(String rpcId);
 
-    /**
-     * Set a result for this response as a JSON value.
-     *
-     * @param result the result
-     * @return this response
-     * @see #error()
-     */
+    @Override
     JsonRpcResponse result(JsonValue result);
 
-    /**
-     * Set a result as an arbitrary object that can be mapped to JSON. This
-     * method will serialize the parameter using JSONB.
-     *
-     * @param object the object
-     * @return this response
-     * @throws jakarta.json.JsonException if an error occurs during serialization
-     * @see #error()
-     */
+    @Override
     JsonRpcResponse result(Object object);
 
-    /**
-     * Set a JSON-RPC error on this response with a code and a message.
-     *
-     * @param code the error code
-     * @param message the error message
-     * @return this response
-     * @see #result()
-     */
+    @Override
     JsonRpcResponse error(int code, String message);
 
-    /**
-     * Set a JSON-RPC error on this response with a code, a message and
-     * some associated data.
-     *
-     * @param code the error code
-     * @param message the error message
-     * @param data the data
-     * @return this response
-     * @see #result()
-     */
+    @Override
     JsonRpcResponse error(int code, String message, JsonValue data);
 
     /**
@@ -123,27 +70,6 @@ public interface JsonRpcResponse extends ServerResponse {
     }
 
     /**
-     * Get the JSON-RPC ID set on this response.
-     *
-     * @return the ID
-     */
-    Optional<JsonValue> rpcId();
-
-    /**
-     * Get the result set on this response.
-     *
-     * @return the result as a JSON value
-     */
-    Optional<JsonValue> result();
-
-    /**
-     * Get an error set on this response.
-     *
-     * @return the error
-     */
-    Optional<JsonRpcError> error();
-
-    /**
      * Get the status set on this response.
      *
      * @return the status
@@ -155,11 +81,4 @@ public interface JsonRpcResponse extends ServerResponse {
      * until the response is delivered.
      */
     void send();
-
-    /**
-     * Get a complete response as a JSON object.
-     *
-     * @return a JSON object that represents the response
-     */
-    JsonObject asJsonObject();
 }

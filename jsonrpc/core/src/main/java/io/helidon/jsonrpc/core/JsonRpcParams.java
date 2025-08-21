@@ -17,6 +17,7 @@ package io.helidon.jsonrpc.core;
 
 import java.util.Optional;
 
+import jakarta.json.Json;
 import jakarta.json.JsonArray;
 import jakarta.json.JsonObject;
 import jakarta.json.JsonStructure;
@@ -38,6 +39,13 @@ public interface JsonRpcParams {
     }
 
     /**
+     * Access all request params as a JSON structure.
+     *
+     * @return a JSON structure
+     */
+    JsonStructure asJsonStructure();
+
+    /**
      * Access all request params as a single JSON object.
      *
      * @return a JSON object
@@ -52,13 +60,6 @@ public interface JsonRpcParams {
      * @throws ClassCastException if not a JSON array
      */
     JsonArray asJsonArray();
-
-    /**
-     * Access all request params as a single JSON structure.
-     *
-     * @return a JSON structure
-     */
-    JsonStructure asJsonStructure();
 
     /**
      * Get a single param by name as a JSON value.
@@ -90,6 +91,26 @@ public interface JsonRpcParams {
     Optional<JsonValue> find(String name);
 
     /**
+     * Set a param by name using a string.
+     *
+     * @param name param name
+     * @param value param value
+     * @return this instance
+     */
+    default JsonRpcParams put(String name, String value) {
+        return put(name, Json.createValue(value));
+    }
+
+    /**
+     * Set a param by name using a JSON value.
+     *
+     * @param name param name
+     * @param value param value
+     * @return this instance
+     */
+    JsonRpcParams put(String name, JsonValue value);
+
+    /**
      * Get a single array param by index as a JSON value.
      *
      * @param index the index
@@ -118,6 +139,26 @@ public interface JsonRpcParams {
      * @throws IndexOutOfBoundsException if index is out of bounds
      */
     Optional<JsonValue> find(int index);
+
+    /**
+     * Set an array param by index using a string.
+     *
+     * @param index the index
+     * @param value param value
+     * @return this instance
+     */
+    default JsonRpcParams put(int index, String value) {
+        return put(index, Json.createValue(value));
+    }
+
+    /**
+     * Set an array param by index using a JSON value.
+     *
+     * @param index the index
+     * @param value param value
+     * @return this instance
+     */
+    JsonRpcParams put(int index, JsonValue value);
 
     /**
      * Map all request params to a bean class type using JSONB.

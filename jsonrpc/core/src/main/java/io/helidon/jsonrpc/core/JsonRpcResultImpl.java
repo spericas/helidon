@@ -91,4 +91,17 @@ class JsonRpcResultImpl implements JsonRpcResult {
     public <T> T as(Class<T> type) {
         return JsonUtil.jsonpToJsonb(asJsonObject(), type);
     }
+
+    @Override
+    public boolean equals(Object o) {
+        if (!(o instanceof JsonRpcResultImpl that)) {
+            return false;
+        }
+        return Objects.equals(result, that.result);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hashCode(result);
+    }
 }

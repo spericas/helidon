@@ -19,7 +19,9 @@ package io.helidon.jsonrpc.core;
 import java.util.Objects;
 import java.util.Optional;
 
+import jakarta.json.Json;
 import jakarta.json.JsonObject;
+import jakarta.json.JsonObjectBuilder;
 import jakarta.json.JsonValue;
 
 /**
@@ -27,36 +29,65 @@ import jakarta.json.JsonValue;
  */
 class JsonRpcErrorImpl implements JsonRpcError {
 
-    private final JsonObject error;
+    private final int code;
+    private final String message;
+    private final JsonValue data;
 
-    JsonRpcErrorImpl(JsonObject error) {
-        this.error = Objects.requireNonNull(error);
+    JsonRpcErrorImpl(int code, String message, JsonValue data) {
+        this.code = code;
+        this.message = Objects.requireNonNull(message, "message is null");
+        this.data = data;
+    }
+
+    JsonRpcErrorImpl(JsonObject jsonObject) {
+        Objects.requireNonNull(jsonObject);
+        this.code = jsonObject.getInt("code");
+        this.message = Objects.requireNonNull(jsonObject.getString("message"));
+        this.data = jsonObject.get("data");
     }
 
     @Override
     public int code() {
-        return error.getInt("code");
+        return code;
     }
 
     @Override
     public String message() {
-        return error.getString("message");
+        return message;
     }
 
     @Override
     public Optional<JsonValue> data() {
-        return Optional.ofNullable(error.get("data"));
+        return Optional.ofNullable(data);
     }
 
     @Override
     public <T> Optional<T> dataAs(Class<T> type) {
-        JsonValue data = error.get("data");
         return data == null ? Optional.empty()
                 : Optional.of(JsonUtil.jsonpToJsonb(data.asJsonObject(), type));
     }
 
     @Override
     public JsonObject asJsonObject() {
-        return error;
+        JsonObjectBuilder builder = Json.createObjectBuilder();
+        builder.add("code", code);
+        builder.add("message", message);
+        if (data != null) {
+            builder.add("data", data);
+        }
+        return builder.build();
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (!(o instanceof JsonRpcErrorImpl that)) {
+            return false;
+        }
+        return code == that.code && Objects.equals(message, that.message) && Objects.equals(data, that.data);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(code, message, data);
     }
 }
