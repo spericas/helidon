@@ -32,6 +32,10 @@ class JsonRpcMessageRequestImpl implements JsonRpcMessageRequest {
     private JsonValue rpcId;
     private JsonRpcParams params = new JsonRpcParamsImpl();
 
+    JsonRpcMessageRequestImpl(String rpcMethod) {
+        this(rpcMethod, null);
+    }
+
     JsonRpcMessageRequestImpl(String rpcMethod, JsonValue rpcId) {
         this.rpcMethod = Objects.requireNonNull(rpcMethod);
         this.rpcId = rpcId;
@@ -42,7 +46,9 @@ class JsonRpcMessageRequestImpl implements JsonRpcMessageRequest {
             throw new IllegalArgumentException("Only JSON-RPC versions 2.0 is supported");
         }
         this.rpcMethod = Objects.requireNonNull(jsonObject.getString("method", ""));
-        this.rpcId = jsonObject.get("id");
+        if (jsonObject.containsKey("id")) {
+            this.rpcId = jsonObject.get("id");
+        }
         JsonValue params = jsonObject.get("params");
         if (params instanceof JsonStructure structure) {
             this.params = new JsonRpcParamsImpl(structure);

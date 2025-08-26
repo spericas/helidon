@@ -22,21 +22,22 @@ import jakarta.json.JsonObject;
 import jakarta.json.JsonValue;
 
 /**
- * A JSON-RPC message that can be a request or a response.
+ * A JSON-RPC message that can be a request, a notification or a response.
  */
 public interface JsonRpcMessage {
 
     /**
-     * Create either a JSON-RPC request or response from a JSON object.
+     * Create a JSON-RPC request, notification or response from a JSON object.
      *
      * @param jsonObject the JSON object
-     * @return a request or a response
+     * @return a request, notification or response
      * @throws java.lang.IllegalArgumentException if the type of message is unknown
      */
     static JsonRpcMessage create(JsonObject jsonObject) {
         Objects.requireNonNull(jsonObject);
         if (jsonObject.containsKey("method")) {
-            return new JsonRpcMessageRequestImpl(jsonObject);
+            return jsonObject.containsKey("id") ? new JsonRpcMessageRequestImpl(jsonObject)
+                    : new JsonRpcMessageNotificationImpl(jsonObject);
         }
         if (jsonObject.containsKey("result") || jsonObject.containsKey("error")) {
             return new JsonRpcMessageResponseImpl(jsonObject);

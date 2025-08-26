@@ -63,6 +63,7 @@ public interface JsonRpcMessageRequest extends JsonRpcMessage {
         return rpcId(Json.createValue(rpcId));
     }
 
+    @Override
     default JsonRpcMessageRequest rpcId(String rpcId) {
         return rpcId(Json.createValue(rpcId));
     }

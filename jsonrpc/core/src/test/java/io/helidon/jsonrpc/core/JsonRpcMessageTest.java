@@ -37,6 +37,15 @@ class JsonRpcMessageTest {
     }
 
     @Test
+    void testCreateNotification() {
+        JsonObjectBuilder builder = Json.createObjectBuilder();
+        builder.add("jsonrpc", "2.0");
+        builder.add("method", "test");
+        JsonObject jsonObject = builder.build();
+        assertThat(JsonRpcMessage.create(jsonObject), instanceOf(JsonRpcMessageNotification.class));
+    }
+
+    @Test
     void testCreateResultResponse() {
         JsonObjectBuilder builder = Json.createObjectBuilder();
         builder.add("jsonrpc", "2.0");
