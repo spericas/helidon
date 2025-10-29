@@ -240,7 +240,7 @@ class GrpcProtocolHandler<REQ, RES> implements Http2SubProtocolSelector.SubProto
 
                     // read and possibly decompress data
                     bytesReceived += entityBytes.available();
-                    InputStream is = entityBytes.asInputStream();
+                    InputStream is = new BufferDataInputStream(entityBytes);
                     REQ request = route.method().parseRequest(isCompressed ? decompressor.decompress(is) : is);
                     listenerQueue.add(request);
                     flushQueue();
@@ -534,5 +534,54 @@ class GrpcProtocolHandler<REQ, RES> implements Http2SubProtocolSelector.SubProto
 
             return new MethodMetrics(callStarted, callDuration, sentMessageSize, recvMessageSize);
         });
+    }
+
+    /**
+     * An input stream that can return its length. gRPC parsers can use this extra
+     * knowledge for optimizations.
+     */
+    static class BufferDataInputStream extends InputStream implements KnownLength {
+        private final int length;
+        private final InputStream delegate;
+
+        BufferDataInputStream(BufferData bufferData) {
+            this.length = bufferData.available();
+            this.delegate = bufferData.asInputStream();
+        }
+
+        @Override
+        public int read() throws IOException {
+            return delegate.read();
+        }
+
+        @Override
+        public int read(byte[] b) throws IOException {
+            return delegate.read(b);
+        }
+
+        @Override
+        public int read(byte[] b, int off, int len) throws IOException {
+            return delegate.read(b, off, len);
+        }
+
+        @Override
+        public byte[] readAllBytes() throws IOException {
+            return delegate.readAllBytes();
+        }
+
+        @Override
+        public byte[] readNBytes(int len) throws IOException {
+            return delegate.readNBytes(len);
+        }
+
+        @Override
+        public int readNBytes(byte[] b, int off, int len) throws IOException {
+            return delegate.readNBytes(b, off, len);
+        }
+
+        @Override
+        public int available() {
+            return length;
+        }
     }
 }
