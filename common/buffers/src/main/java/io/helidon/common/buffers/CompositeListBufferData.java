@@ -16,6 +16,7 @@
 
 package io.helidon.common.buffers;
 
+import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.ByteBuffer;
@@ -270,7 +271,30 @@ class CompositeListBufferData extends ReadOnlyBufferData implements CompositeBuf
     }
 
     @Override
+    public InputStream asInputStream() {
+        return new CompositeInputStream();
+    }
+
+    @Override
     public String toString() {
         return "comp-list: a=" + available();
+    }
+
+    class CompositeInputStream extends InputStream {
+        private int available;
+
+        CompositeInputStream() {
+            available = CompositeListBufferData.this.available();
+        }
+
+        @Override
+        public int read() throws IOException {
+            return (available-- > 0) ? CompositeListBufferData.this.read() : -1;
+        }
+
+        @Override
+        public int read(byte[] b, int off, int len) throws IOException {
+            return super.read(b, off, len);
+        }
     }
 }

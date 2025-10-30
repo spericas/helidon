@@ -31,6 +31,7 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import io.helidon.common.LazyValue;
 import io.helidon.common.buffers.BufferData;
+import io.helidon.common.buffers.CompositeBufferData;
 import io.helidon.grpc.core.GrpcHeadersUtil;
 import io.helidon.http.Header;
 import io.helidon.http.HeaderName;
@@ -111,7 +112,7 @@ class GrpcProtocolHandler<REQ, RES> implements Http2SubProtocolSelector.SubProto
     private final GrpcConfig grpcConfig;
 
     private volatile ServerCall.Listener<REQ> listener;
-    private BufferData entityBytes;
+    private CompositeBufferData entityBytes;
     private BufferData readBufferData = BufferData.create(INITIAL_BUFFER_SIZE);
     private BufferData unreadBufferData;
     private long entityBytesLeft;
@@ -212,24 +213,39 @@ class GrpcProtocolHandler<REQ, RES> implements Http2SubProtocolSelector.SubProto
                 newData = data;
             }
 
-            // process 0 or more requests from data
-            while (newData.available() > 0) {
-                // start of new request?
+            // process 0 or more gRPC requests from data
+            boolean consumed = false;
+            while (newData.available() > 0 && !consumed) {
+                // start of new gRPC request?
                 if (entityBytes == null) {
                     if (newData.available() >= GRPC_HEADER_SIZE) {
                         isCompressed = (newData.read() == 1);
                         entityBytesLeft = newData.readUnsignedInt32();
-                        entityBytes = allocateReadBuffer((int) entityBytesLeft);
                     } else {
                         unreadBufferData = newData;
                         return;     // need more for gRPC header
                     }
                 }
 
-                // append data to current entity
-                int writableNow = (int) Math.min(entityBytesLeft, newData.available());
-                entityBytes.write(newData, writableNow);
-                entityBytesLeft -= writableNow;
+                // create next buffer for entityBytes
+                BufferData next;
+                int available = newData.available();
+                if (entityBytesLeft >= available) {     // need more data
+                    next = newData;
+                    entityBytesLeft -= available;
+                    consumed = true;
+                } else {
+                    next = allocateReadBuffer((int) entityBytesLeft);
+                    next.write(newData, (int) entityBytesLeft);
+                    entityBytesLeft = 0L;
+                }
+
+                // collect new buffer in entityBytes
+                if (entityBytes == null) {
+                    entityBytes = BufferData.createComposite(next);
+                } else {
+                    entityBytes.add(next);
+                }
 
                 // is the entity complete?
                 if (entityBytesLeft == 0) {
@@ -240,14 +256,13 @@ class GrpcProtocolHandler<REQ, RES> implements Http2SubProtocolSelector.SubProto
 
                     // read and possibly decompress data
                     bytesReceived += entityBytes.available();
-                    InputStream is = new BufferDataInputStream(entityBytes);
+                    InputStream is = entityBytes.asInputStream(); // BufferDataInputStream(entityBytes);
                     REQ request = route.method().parseRequest(isCompressed ? decompressor.decompress(is) : is);
                     listenerQueue.add(request);
                     flushQueue();
 
-                    // reset entity state
+                    // reset entityBytes
                     entityBytes = null;
-                    entityBytesLeft = 0L;
                 }
             }
 
