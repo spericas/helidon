@@ -149,6 +149,11 @@ class SocketWriterAsync extends SocketWriter implements DataWriter {
     }
 
     @Override
+    public void writeBorrowed(BufferData buffer) {
+        write(Objects.requireNonNull(buffer).copy());
+    }
+
+    @Override
     public void writeNow(BufferData buffer) {
         flush(Objects.requireNonNull(buffer));
     }

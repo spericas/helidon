@@ -142,6 +142,11 @@ class DirectWsConnection {
             }
 
             @Override
+            public void writeBorrowed(BufferData buffer) {
+                write(buffer);
+            }
+
+            @Override
             public void writeNow(BufferData... buffers) {
                 for (BufferData buffer : buffers) {
                     writeNow(buffer);

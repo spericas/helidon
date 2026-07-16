@@ -22,41 +22,47 @@ import java.io.OutputStream;
 import java.io.UncheckedIOException;
 import java.nio.ByteBuffer;
 import java.nio.charset.Charset;
+import java.util.Objects;
 
 class FixedBufferData implements BufferData {
     private final byte[] bytes;
-    private final int length;
+    private final int start;
+    private final int end;
     private int writePosition;
     private int readPosition;
 
     FixedBufferData(int length) {
         this.bytes = new byte[length];
-        this.length = length;
+        this.start = 0;
+        this.end = length;
     }
 
     FixedBufferData(byte[] bytes) {
-        this.bytes = bytes;
-        this.length = bytes.length;
-        this.writePosition = this.length;
+        this.bytes = Objects.requireNonNull(bytes);
+        this.start = 0;
+        this.end = bytes.length;
+        this.writePosition = this.end;
     }
 
     FixedBufferData(byte[] bytes, int position, int length) {
-        this.bytes = bytes;
-        this.length = length;
+        this.bytes = Objects.requireNonNull(bytes);
+        Objects.checkFromIndexSize(position, length, bytes.length);
+        this.start = position;
+        this.end = position + length;
         this.writePosition = position + length;
         this.readPosition = position;
     }
 
     @Override
     public FixedBufferData reset() {
-        this.writePosition = 0;
-        this.readPosition = 0;
+        this.writePosition = start;
+        this.readPosition = start;
         return this;
     }
 
     @Override
     public BufferData rewind() {
-        this.readPosition = 0;
+        this.readPosition = start;
         return this;
     }
 
@@ -77,7 +83,7 @@ class FixedBufferData implements BufferData {
 
     @Override
     public int readFrom(InputStream in) {
-        int toRead = length - writePosition;
+        int toRead = end - writePosition;
         int read;
         try {
             read = in.read(bytes, writePosition, toRead);
@@ -93,7 +99,7 @@ class FixedBufferData implements BufferData {
 
     @Override
     public int readFrom(ByteBuffer buf) {
-        int toRead = length - writePosition;
+        int toRead = end - writePosition;
         int read = Math.min(toRead, buf.remaining());
         buf.get(bytes, writePosition, read);
         writePosition += read;
@@ -103,7 +109,7 @@ class FixedBufferData implements BufferData {
     @Override
     public int read() {
         if (readPosition >= writePosition) {
-            throw new ArrayIndexOutOfBoundsException("This buffer has " + length
+            throw new ArrayIndexOutOfBoundsException("This buffer has " + (end - start)
                                                              + " bytes, requested to read at " + readPosition);
         }
         return bytes[readPosition++] & 0xFF;
@@ -155,29 +161,33 @@ class FixedBufferData implements BufferData {
 
     @Override
     public void write(BufferData toWrite) {
-        byte[] buffer = new byte[length - writePosition];
-        int read = toWrite.read(buffer);
-        System.arraycopy(buffer, 0, this.bytes, writePosition, read);
-        writePosition += read;
+        write(toWrite, Math.min(toWrite.available(), capacity()));
     }
 
     @Override
     public void write(BufferData toWrite, int length) {
-        byte[] buffer = new byte[length];
-        int read = toWrite.read(buffer);
-        System.arraycopy(buffer, 0, this.bytes, writePosition, read);
+        int read = toWrite.read(this.bytes, writePosition, Math.min(length, capacity()));
         writePosition += read;
     }
 
     @Override
+    public ByteBuffer[] readableByteBuffers() {
+        if (consumed()) {
+            return new ByteBuffer[0];
+        }
+        ByteBuffer view = ByteBuffer.wrap(bytes, readPosition, available()).slice().asReadOnlyBuffer();
+        return new ByteBuffer[] {view};
+    }
+
+    @Override
     public String debugDataBinary() {
-        return BufferUtil.debugDataBinary(bytes, 0, writePosition);
+        return BufferUtil.debugDataBinary(bytes, start, writePosition);
     }
 
     @Override
     public String debugDataHex(boolean fullBuffer) {
         if (fullBuffer) {
-            return BufferUtil.debugDataHex(bytes, 0, writePosition);
+            return BufferUtil.debugDataHex(bytes, start, writePosition);
         } else {
             return BufferUtil.debugDataHex(bytes, readPosition, writePosition);
         }
@@ -229,7 +239,7 @@ class FixedBufferData implements BufferData {
 
     @Override
     public int capacity() {
-        return length - writePosition;
+        return end - writePosition;
     }
 
     @Override
@@ -239,6 +249,6 @@ class FixedBufferData implements BufferData {
 
     @Override
     public String toString() {
-        return "fixed: l=" + length + ", r=" + readPosition + ", w=" + writePosition;
+        return "fixed: l=" + (end - start) + ", r=" + (readPosition - start) + ", w=" + (writePosition - start);
     }
 }

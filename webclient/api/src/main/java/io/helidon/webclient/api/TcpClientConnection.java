@@ -387,6 +387,11 @@ public class TcpClientConnection implements ClientConnection {
         }
 
         @Override
+        public void writeBorrowed(BufferData buffer) {
+            write(buffer);
+        }
+
+        @Override
         public void writeNow(BufferData... buffers) {
             flush();
             for (BufferData buffer : buffers) {

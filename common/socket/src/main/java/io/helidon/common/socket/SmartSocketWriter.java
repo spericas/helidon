@@ -67,6 +67,15 @@ public class SmartSocketWriter extends SocketWriter {
 
     @Override
     public void write(BufferData buffer) {
+        write(buffer, false);
+    }
+
+    @Override
+    public void writeBorrowed(BufferData buffer) {
+        write(buffer, true);
+    }
+
+    private void write(BufferData buffer, boolean borrowed) {
         Objects.requireNonNull(buffer);
         writeLock.lock();
         try {
@@ -77,7 +86,7 @@ public class SmartSocketWriter extends SocketWriter {
                 return;
             }
 
-            asyncWriter.write(buffer);
+            asyncWriter.write(borrowed ? buffer.copy() : buffer);
             if (++windowIndex % WINDOW_SIZE == 0 && asyncWriter.avgQueueSize() < QUEUE_SIZE_THRESHOLD) {
                 // Drain accepted async writes before publishing the one-way transition to sync mode.
                 asyncWriter.flush();

@@ -365,37 +365,69 @@ class SocketWriterTest {
     }
 
     @Test
-    void smartWriterWriteNowInAsyncModeWaitsForQueuedWrites() throws Exception {
+    void smartWriterBorrowedWriteInAsyncModeCopiesBeforeEnqueue() throws Exception {
         ExecutorService executor = Executors.newSingleThreadExecutor();
-        ExecutorService writeNowExecutor = Executors.newSingleThreadExecutor(runnable -> new Thread(runnable, "write-now-test"));
         TestSocket socket = new TestSocket(true);
         SmartSocketWriter writer = new SmartSocketWriter(executor, socket.socket(), 2);
-        CountDownLatch writeNowWaiting = new CountDownLatch(1);
-        Future<?> writeNow;
 
         try {
-            writer.beforeFlushAwait(writeNowWaiting::countDown);
             writer.write(BufferData.create(new byte[] {1}));
             assertThat("Initial async write did not start", socket.awaitFirstWrite(), is(true));
 
-            writeNow = writeNowExecutor.submit(() -> writer.writeNow(BufferData.create(new byte[] {2})));
+            byte[] borrowedBytes = {2};
+            BufferData borrowedBuffer = BufferData.create(borrowedBytes);
+            writer.writeBorrowed(borrowedBuffer);
+            assertThat(borrowedBuffer.consumed(), is(true));
+            borrowedBytes[0] = 3;
 
-            assertThat("writeNow did not reach the async flush wait",
-                       writeNowWaiting.await(10, TimeUnit.SECONDS),
-                       is(true));
-            assertThat("writeNow completed before the queued write was released", writeNow.isDone(), is(false));
             socket.releaseFirstWrite();
-            writeNow.get(2, TimeUnit.SECONDS);
+            writer.flush();
 
             assertThat(socket.writtenBytes(), is(new byte[] {1, 2}));
-            assertThat(socket.writeThreadNames(), contains("[test child]", "write-now-test"));
         } finally {
             socket.releaseFirstWrite();
-            writeNowExecutor.shutdownNow();
             executor.shutdownNow();
-            writeNowExecutor.awaitTermination(10, TimeUnit.SECONDS);
             executor.awaitTermination(10, TimeUnit.SECONDS);
         }
+    }
+
+    @Test
+    void asyncWriterBorrowedWriteCopiesBeforeEnqueue() throws Exception {
+        ExecutorService executor = Executors.newSingleThreadExecutor();
+        TestSocket socket = new TestSocket(true);
+        SocketWriterAsync writer = new SocketWriterAsync(executor, socket.socket(), 2);
+
+        try {
+            writer.write(BufferData.create(new byte[] {1}));
+            assertThat("Initial async write did not start", socket.awaitFirstWrite(), is(true));
+
+            byte[] borrowedBytes = {2};
+            BufferData borrowedBuffer = BufferData.create(borrowedBytes);
+            writer.writeBorrowed(borrowedBuffer);
+            assertThat(borrowedBuffer.consumed(), is(true));
+            borrowedBytes[0] = 3;
+
+            socket.releaseFirstWrite();
+            writer.flush();
+
+            assertThat(socket.writtenBytes(), is(new byte[] {1, 2}));
+        } finally {
+            socket.releaseFirstWrite();
+            executor.shutdownNow();
+            executor.awaitTermination(10, TimeUnit.SECONDS);
+        }
+    }
+
+    @Test
+    void directWriterBorrowedWriteUsesNormalWrite() {
+        TestSocket socket = new TestSocket(false);
+        SocketWriter writer = SocketWriter.create(socket.socket());
+        BufferData buffer = BufferData.create(new byte[] {1});
+
+        writer.writeBorrowed(buffer);
+
+        assertThat(buffer.consumed(), is(true));
+        assertThat(socket.writtenBytes(), is(new byte[] {1}));
     }
 
     @Test

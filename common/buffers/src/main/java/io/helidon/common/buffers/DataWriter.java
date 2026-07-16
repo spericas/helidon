@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, 2025 Oracle and/or its affiliates.
+ * Copyright (c) 2022, 2026 Oracle and/or its affiliates.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,8 +18,6 @@ package io.helidon.common.buffers;
 
 /**
  * Write data to the underlying transport (most likely a socket).
- * Do not combine {@link #write(io.helidon.common.buffers.BufferData)} and {@link #writeNow(io.helidon.common.buffers.BufferData)}
- * to a single underlying transport, unless you can guarantee there will not be a race between these two methods.
  */
 public interface DataWriter extends AutoCloseable {
     /**
@@ -37,14 +35,29 @@ public interface DataWriter extends AutoCloseable {
     void write(BufferData buffer);
 
     /**
-     * Write buffers to underlying transport blocking until the buffers are written.
+     * Writes a buffer that remains owned by the caller and may be reused immediately after this method returns.
+     * The writer must not retain the buffer or its backing storage after this method returns. Any writes submitted
+     * before this invocation must be written first.
+     * <p>
+     * This method consumes the buffer. The caller may reset or otherwise reuse it after the method returns.
+     *
+     * @param buffer buffer to write
+     */
+    default void writeBorrowed(BufferData buffer) {
+        writeNow(buffer);
+    }
+
+    /**
+     * Write buffers to underlying transport blocking until the buffers are written. Any writes submitted before this
+     * invocation must be written first.
      *
      * @param buffers buffers to write
      */
     void writeNow(BufferData... buffers);
 
     /**
-     * Write buffer to underlying transport blocking until the buffer is written.
+     * Write buffer to underlying transport blocking until the buffer is written. Any writes submitted before this
+     * invocation must be written first.
      *
      * @param buffer buffer to write
      */

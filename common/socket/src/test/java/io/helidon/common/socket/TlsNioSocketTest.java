@@ -45,11 +45,51 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 class TlsNioSocketTest {
+
+    @Test
+    void writeWrapsCompositeBufferComponentsDirectly() throws Exception {
+        BlockingSocketChannel channel = new BlockingSocketChannel();
+        channel.allowWriteToFinish();
+        SSLEngine engine = mock(SSLEngine.class);
+        SSLSession session = mock(SSLSession.class);
+        AtomicInteger wrappedComponents = new AtomicInteger();
+
+        when(engine.getSession()).thenReturn(session);
+        when(engine.getHandshakeStatus()).thenReturn(SSLEngineResult.HandshakeStatus.NOT_HANDSHAKING);
+        when(session.getPacketBufferSize()).thenReturn(64);
+        when(session.getApplicationBufferSize()).thenReturn(64);
+        when(engine.wrap(any(ByteBuffer[].class), anyInt(), anyInt(), any(ByteBuffer.class))).thenAnswer(invocation -> {
+            ByteBuffer[] sources = invocation.getArgument(0);
+            int offset = invocation.getArgument(1);
+            int length = invocation.getArgument(2);
+            ByteBuffer destination = invocation.getArgument(3);
+            int consumed = 0;
+            wrappedComponents.set(length);
+            for (int i = offset; i < offset + length; i++) {
+                while (sources[i].hasRemaining()) {
+                    destination.put(sources[i].get());
+                    consumed++;
+                }
+            }
+            return new SSLEngineResult(SSLEngineResult.Status.OK,
+                                       SSLEngineResult.HandshakeStatus.NOT_HANDSHAKING,
+                                       consumed,
+                                       consumed);
+        });
+        BufferData buffer = BufferData.create(BufferData.create("one"), BufferData.create("two"));
+        TlsNioSocket socket = TlsNioSocket.server(channel, engine, "listener", "server");
+
+        socket.write(buffer);
+
+        assertEquals(2, wrappedComponents.get());
+        assertTrue(buffer.consumed());
+    }
 
     @Test
     void closeDoesNotRaceWithInFlightTlsWrite() throws Exception {

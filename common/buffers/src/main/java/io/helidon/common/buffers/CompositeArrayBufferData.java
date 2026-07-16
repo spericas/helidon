@@ -20,6 +20,8 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.ByteBuffer;
 import java.nio.charset.Charset;
+import java.util.ArrayList;
+import java.util.List;
 
 class CompositeArrayBufferData extends ReadOnlyBufferData implements CompositeBufferData {
     private final BufferData[] data;
@@ -152,6 +154,19 @@ class CompositeArrayBufferData extends ReadOnlyBufferData implements CompositeBu
         }
 
         return written;
+    }
+
+    @Override
+    public ByteBuffer[] readableByteBuffers() {
+        List<ByteBuffer> buffers = new ArrayList<>(data.length);
+        for (BufferData datum : data) {
+            for (ByteBuffer buffer : datum.readableByteBuffers()) {
+                if (buffer.hasRemaining()) {
+                    buffers.add(buffer);
+                }
+            }
+        }
+        return buffers.toArray(ByteBuffer[]::new);
     }
 
     @Override

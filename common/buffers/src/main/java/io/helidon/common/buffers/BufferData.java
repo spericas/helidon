@@ -454,6 +454,29 @@ public interface BufferData {
     int writeTo(ByteBuffer writeBuffer, int length);
 
     /**
+     * Creates read-only byte buffer views of all unread data without consuming this buffer.
+     * Built-in implementations return views backed by their existing storage; other implementations
+     * may use the default copied representation. Advancing the positions of the returned buffers does
+     * not change this buffer's read position. A caller that transfers bytes from these views must use
+     * {@link #skip(int)} to consume the corresponding bytes from this buffer.
+     * <p>
+     * The returned views are valid only until this buffer or its backing storage is modified.
+     *
+     * @return read-only views of the unread data, or an empty array if no data is available
+     */
+    default ByteBuffer[] readableByteBuffers() {
+        int available = available();
+        if (available == 0) {
+            return new ByteBuffer[0];
+        }
+        byte[] bytes = new byte[available];
+        for (int i = 0; i < available; i++) {
+            bytes[i] = (byte) get(i);
+        }
+        return new ByteBuffer[] {ByteBuffer.wrap(bytes).asReadOnlyBuffer()};
+    }
+
+    /**
      * Write the byte array to this buffer.
      *
      * @param bytes byte to write

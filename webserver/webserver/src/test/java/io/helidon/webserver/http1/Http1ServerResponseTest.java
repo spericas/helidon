@@ -44,9 +44,35 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 class Http1ServerResponseTest {
+
+    @Test
+    void directSendUsesBorrowedWrite() {
+        DataWriter dataWriter = mock(DataWriter.class);
+        Http1ServerResponse response = createResponse(dataWriter);
+
+        response.send("hello".getBytes(StandardCharsets.UTF_8));
+
+        verify(dataWriter).writeBorrowed(any(BufferData.class));
+        verify(dataWriter, never()).write(any(BufferData.class));
+    }
+
+    @Test
+    void fixedLengthStreamUsesBorrowedWrite() throws Exception {
+        DataWriter dataWriter = mock(DataWriter.class);
+        Http1ServerResponse response = createResponse(dataWriter);
+        response.contentLength(5);
+
+        response.outputStream().write("hello".getBytes(StandardCharsets.UTF_8));
+        response.commit();
+
+        verify(dataWriter).writeBorrowed(any(BufferData.class));
+        verify(dataWriter, never()).write(any(BufferData.class));
+    }
 
     @Test
     void directSendWrapsUncheckedIOException() {
@@ -96,6 +122,12 @@ class Http1ServerResponseTest {
     private static Http1ServerResponse createResponse(RuntimeException writerFailure) {
         DataWriter dataWriter = mock(DataWriter.class);
         doThrow(writerFailure).when(dataWriter).write(any(BufferData.class));
+        doThrow(writerFailure).when(dataWriter).writeBorrowed(any(BufferData.class));
+
+        return createResponse(dataWriter);
+    }
+
+    private static Http1ServerResponse createResponse(DataWriter dataWriter) {
 
         Http1ServerRequest request = mock(Http1ServerRequest.class);
         when(request.headers()).thenReturn(ServerRequestHeaders.create(WritableHeaders.create()));

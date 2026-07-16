@@ -88,6 +88,21 @@ public class NioSocketTest {
                            "0\r\n\r\n".getBytes(StandardCharsets.US_ASCII));
     }
 
+    @Test
+    void writerUsesGatheringWriteForCompositeBuffer() {
+        byte[] first = "header".getBytes(StandardCharsets.US_ASCII);
+        byte[] second = "body".getBytes(StandardCharsets.US_ASCII);
+        byte[] third = "trailer".getBytes(StandardCharsets.US_ASCII);
+        CapturingSocketChannel channel = new CapturingSocketChannel(3);
+        SocketWriter writer = SocketWriter.create(NioSocket.server(channel, "child", "server"));
+
+        writer.write(BufferData.create(BufferData.create(first), BufferData.create(second), BufferData.create(third)));
+
+        assertEquals(new String(concat(first, second, third), StandardCharsets.US_ASCII),
+                     new String(channel.writtenBytes(), StandardCharsets.US_ASCII));
+        assertEquals(3, channel.maxGatheredBuffers());
+    }
+
     private static void assertWrittenBytes(int maxBytesPerWrite, byte[]... writes) {
         CapturingSocketChannel channel = new CapturingSocketChannel(maxBytesPerWrite);
         SocketWriter writer = SocketWriter.create(NioSocket.server(channel, "child", "server"));
@@ -142,6 +157,7 @@ public class NioSocketTest {
     private static final class CapturingSocketChannel extends SocketChannel {
         private final ByteArrayOutputStream written = new ByteArrayOutputStream();
         private final int maxBytesPerWrite;
+        private int maxGatheredBuffers;
 
         private CapturingSocketChannel(int maxBytesPerWrite) {
             super(SelectorProvider.provider());
@@ -150,6 +166,10 @@ public class NioSocketTest {
 
         byte[] writtenBytes() {
             return written.toByteArray();
+        }
+
+        int maxGatheredBuffers() {
+            return maxGatheredBuffers;
         }
 
         @Override
@@ -163,6 +183,7 @@ public class NioSocketTest {
 
         @Override
         public long write(ByteBuffer[] srcs, int offset, int length) {
+            maxGatheredBuffers = Math.max(maxGatheredBuffers, length);
             long totalWritten = 0;
             for (int i = offset; i < offset + length; i++) {
                 if (!srcs[i].hasRemaining()) {

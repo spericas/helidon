@@ -216,12 +216,17 @@ class Http1ServerResponse extends ServerResponseBase<Http1ServerResponse> implem
 
         if (outputStreamFilter == null && !headers.contains(HeaderNames.TRAILER)) {
             byte[] entity = entityBytes(bytes, position, length);
-            BufferData bufferData = (bytes != entity) ? responseBuffer(entity)
-                    : responseBuffer(entity, position, length);         // no encoding, same length
+            boolean borrowed = (bytes == entity);                   // content encoding creates a new response-owned array
+            BufferData bufferData = !borrowed ? responseBuffer(entity)
+                    : responseBuffer(entity, position, length);     // no encoding, same length
             bytesWritten = bufferData.available();
             isSent = true;
             request.reset();
-            writeResponse(dataWriter, bufferData, "Failed to write response");
+            if (borrowed) {
+                writeBorrowedResponse(dataWriter, bufferData, "Failed to write response");
+            } else {
+                writeResponse(dataWriter, bufferData, "Failed to write response");
+            }
             afterSend();
         } else {
             // we should skip encoders if no data is written (e.g. for GZIP)
@@ -449,6 +454,14 @@ class Http1ServerResponse extends ServerResponseBase<Http1ServerResponse> implem
         }
     }
 
+    private static void writeBorrowedResponse(DataWriter dataWriter, BufferData bufferData, String message) {
+        try {
+            dataWriter.writeBorrowed(bufferData);
+        } catch (SocketWriterException | UncheckedIOException e) {
+            throw new ServerConnectionException(message, e);
+        }
+    }
+
     private BufferData responseBuffer(byte[] bytes) {
         return responseBuffer(bytes, 0, bytes.length);
     }
@@ -476,21 +489,23 @@ class Http1ServerResponse extends ServerResponseBase<Http1ServerResponse> implem
         sendListener.status(ctx, usedStatus);
         sendListener.headers(ctx, headers);
 
-        // give some space for code and headers + entity
-        BufferData responseBuffer = BufferData.growing(256 + length);
-
-        nonEntityBytes(headers, usedStatus, responseBuffer, keepAlive, validateHeaders);
+        BufferData headerBuffer = BufferData.growing(256);
+        nonEntityBytes(headers, usedStatus, headerBuffer, keepAlive, validateHeaders);
+        BufferData bodyBuffer = BufferData.create(bytes, position, length);
+        BufferData responseBuffer;
         if (forcedChunkedEncoding) {
             byte[] hex = Integer.toHexString(length).getBytes(StandardCharsets.US_ASCII);
-            responseBuffer.write(hex);
-            responseBuffer.write('\r');
-            responseBuffer.write('\n');
-            responseBuffer.write(bytes, position, length);
-            responseBuffer.write('\r');
-            responseBuffer.write('\n');
-            responseBuffer.write(TERMINATING_CHUNK);
+            BufferData chunkHeader = BufferData.create(hex.length + 2);
+            chunkHeader.write(hex);
+            chunkHeader.write('\r');
+            chunkHeader.write('\n');
+            BufferData chunkTrailer = BufferData.create(TERMINATING_CHUNK.length + 2);
+            chunkTrailer.write('\r');
+            chunkTrailer.write('\n');
+            chunkTrailer.write(TERMINATING_CHUNK);
+            responseBuffer = BufferData.create(headerBuffer, chunkHeader, bodyBuffer, chunkTrailer);
         } else {
-            responseBuffer.write(bytes, position, length);
+            responseBuffer = BufferData.create(headerBuffer, bodyBuffer);
         }
 
         sendListener.data(ctx, responseBuffer);
@@ -700,7 +715,7 @@ class Http1ServerResponse extends ServerResponseBase<Http1ServerResponse> implem
                 writeHeaders(trailers, buffer, this.validateHeaders);
                 buffer.write('\r');        // "\r\n" - empty line after headers
                 buffer.write('\n');
-                writeResponse(dataWriter, buffer, "Failed to write response trailers");
+                writeBorrowedResponse(dataWriter, buffer, "Failed to write response trailers");
             }
 
             responseCloseRunnable.run();
@@ -736,7 +751,7 @@ class Http1ServerResponse extends ServerResponseBase<Http1ServerResponse> implem
         private void terminatingChunk(boolean trailers) {
             BufferData terminatingChunk = BufferData.create(trailers ? TERMINATING_CHUNK_TRAILERS : TERMINATING_CHUNK);
             sendListener.data(ctx, terminatingChunk);
-            writeResponse(dataWriter, terminatingChunk, "Failed to write terminating chunk");
+            writeBorrowedResponse(dataWriter, terminatingChunk, "Failed to write terminating chunk");
         }
 
         private void write(BufferData buffer) throws IOException {
@@ -754,16 +769,16 @@ class Http1ServerResponse extends ServerResponseBase<Http1ServerResponse> implem
                     sendListener.status(ctx, usedStatus);
                     sendListener.headers(ctx, headers);
                     // write headers and payload part in one buffer to avoid TCP/ACK delay problems
-                    BufferData growing = BufferData.growing(256 + buffer.available());
-                    nonEntityBytes(headers, usedStatus, growing, keepAlive, validateHeaders);
+                    BufferData headerBuffer = BufferData.growing(256);
+                    nonEntityBytes(headers, usedStatus, headerBuffer, keepAlive, validateHeaders);
                     // check not exceeding content-length
                     bytesWritten += buffer.available();
                     checkContentLength(buffer);
                     sendListener.data(ctx, buffer);
-                    // write single buffer headers and payload part
-                    growing.write(buffer);
-                    responseBytesTotal += growing.available();
-                    writeResponse(dataWriter, growing, "Failed to write response");
+                    // write headers and caller-owned payload together without copying the payload
+                    BufferData responseBuffer = BufferData.create(headerBuffer, buffer);
+                    responseBytesTotal += responseBuffer.available();
+                    writeBorrowedResponse(dataWriter, responseBuffer, "Failed to write response");
                 } else {
                     // if not chunked, always write
                     writeContent(buffer);
@@ -801,13 +816,10 @@ class Http1ServerResponse extends ServerResponseBase<Http1ServerResponse> implem
         }
 
         private void sendFirstChunkOnly() {
-            int contentLength;
             if (firstBuffer == null) {
                 headers.set(HeaderValues.CONTENT_LENGTH_ZERO);
-                contentLength = 0;
             } else {
                 headers.set(HeaderValues.create(HeaderNames.CONTENT_LENGTH, String.valueOf(firstBuffer.available())));
-                contentLength = firstBuffer.available();
             }
             isChunked = false;
             headers.remove(HeaderNames.TRANSFER_ENCODING);
@@ -816,16 +828,14 @@ class Http1ServerResponse extends ServerResponseBase<Http1ServerResponse> implem
             Status usedStatus = status.get();
             sendListener.status(ctx, usedStatus);
             sendListener.headers(ctx, headers);
-            BufferData bufferData = BufferData.growing(contentLength + 256);
-            nonEntityBytes(headers, usedStatus, bufferData, keepAlive, validateHeaders);
-
-            if (firstBuffer != null) {
-                bufferData.write(firstBuffer);
-            }
+            BufferData headerBuffer = BufferData.growing(256);
+            nonEntityBytes(headers, usedStatus, headerBuffer, keepAlive, validateHeaders);
+            BufferData bufferData = firstBuffer == null ? headerBuffer : BufferData.create(headerBuffer, firstBuffer);
 
             sendListener.data(ctx, bufferData);
             responseBytesTotal += bufferData.available();
             writeResponse(dataWriter, bufferData, "Failed to write response");
+            firstBuffer = null;
         }
 
         private void sendHeadersAndPrepare() {
@@ -853,24 +863,25 @@ class Http1ServerResponse extends ServerResponseBase<Http1ServerResponse> implem
             nonEntityBytes(headers, usedStatus, bufferData, keepAlive, validateHeaders);
             sendListener.data(ctx, bufferData);
             responseBytesTotal += bufferData.available();
-            writeResponse(dataWriter, bufferData, "Failed to write response headers");
+            writeBorrowedResponse(dataWriter, bufferData, "Failed to write response headers");
         }
 
         private void writeChunked(BufferData buffer) {
             int available = buffer.available();
             byte[] hex = Integer.toHexString(available).getBytes(StandardCharsets.US_ASCII);
 
-            BufferData toWrite = BufferData.create(available + hex.length + 4); // \r\n after size, another after chunk
-            toWrite.write(hex);
-            toWrite.write('\r');
-            toWrite.write('\n');
-            toWrite.write(buffer);
-            toWrite.write('\r');
-            toWrite.write('\n');
+            BufferData chunkHeader = BufferData.create(hex.length + 2);
+            chunkHeader.write(hex);
+            chunkHeader.write('\r');
+            chunkHeader.write('\n');
+            BufferData chunkTrailer = BufferData.create(2);
+            chunkTrailer.write('\r');
+            chunkTrailer.write('\n');
+            BufferData toWrite = BufferData.create(chunkHeader, buffer, chunkTrailer);
 
             sendListener.data(ctx, toWrite);
             responseBytesTotal += toWrite.available();
-            writeResponse(dataWriter, toWrite, "Failed to write chunked response data");
+            writeBorrowedResponse(dataWriter, toWrite, "Failed to write chunked response data");
         }
 
         private void checkContentLength(BufferData ignored) throws IOException {
@@ -886,7 +897,7 @@ class Http1ServerResponse extends ServerResponseBase<Http1ServerResponse> implem
             checkContentLength(buffer);
             sendListener.data(ctx, buffer);
             responseBytesTotal += buffer.available();
-            writeResponse(dataWriter, buffer, "Failed to write response content");
+            writeBorrowedResponse(dataWriter, buffer, "Failed to write response content");
         }
     }
 

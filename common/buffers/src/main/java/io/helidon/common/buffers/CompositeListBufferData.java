@@ -161,6 +161,19 @@ class CompositeListBufferData extends ReadOnlyBufferData implements CompositeBuf
     }
 
     @Override
+    public ByteBuffer[] readableByteBuffers() {
+        List<ByteBuffer> buffers = new ArrayList<>(data.size());
+        for (BufferData datum : data) {
+            for (ByteBuffer buffer : datum.readableByteBuffers()) {
+                if (buffer.hasRemaining()) {
+                    buffers.add(buffer);
+                }
+            }
+        }
+        return buffers.toArray(ByteBuffer[]::new);
+    }
+
+    @Override
     public String debugDataBinary() {
         StringBuilder result = new StringBuilder();
 

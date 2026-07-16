@@ -522,23 +522,22 @@ public final class TlsNioSocket extends NioSocket {
             return;
         }
         ensureHandshakeBeforeWrite();
-        while (!buffer.consumed()) {
-            myAppData.clear();
-            buffer.writeTo(myAppData, buffer.available());
-            myAppData.flip();
-
-            while (myAppData.hasRemaining()) {
-                SSLEngineResult result = wrapAndSend(myAppData, false);
-                SSLEngineResult.Status status = result.getStatus();
-                if (status == SSLEngineResult.Status.CLOSED) {
-                    doClosure();
-                    return;
-                }
-                SSLEngineResult.HandshakeStatus handshakeStatus = result.getHandshakeStatus();
-                if (handshakeStatus != SSLEngineResult.HandshakeStatus.FINISHED
-                        && handshakeStatus != SSLEngineResult.HandshakeStatus.NOT_HANDSHAKING) {
-                    doHandshake(handshakeStatus);
-                }
+        ByteBuffer[] appData = buffer.readableByteBuffers();
+        if (appData.length == 0) {
+            throw new IllegalStateException("Buffer has available data but provided no readable byte buffers");
+        }
+        while (hasRemaining(appData)) {
+            SSLEngineResult result = wrapAndSend(appData, false);
+            buffer.skip(result.bytesConsumed());
+            SSLEngineResult.Status status = result.getStatus();
+            if (status == SSLEngineResult.Status.CLOSED) {
+                doClosure();
+                return;
+            }
+            SSLEngineResult.HandshakeStatus handshakeStatus = result.getHandshakeStatus();
+            if (handshakeStatus != SSLEngineResult.HandshakeStatus.FINISHED
+                    && handshakeStatus != SSLEngineResult.HandshakeStatus.NOT_HANDSHAKING) {
+                doHandshake(handshakeStatus);
             }
         }
     }
@@ -570,6 +569,10 @@ public final class TlsNioSocket extends NioSocket {
     }
 
     private SSLEngineResult wrapAndSend(ByteBuffer appData, boolean ignoreClose) throws SSLException {
+        return wrapAndSend(new ByteBuffer[] {appData}, ignoreClose);
+    }
+
+    private SSLEngineResult wrapAndSend(ByteBuffer[] appData, boolean ignoreClose) throws SSLException {
         if (closed && !ignoreClose) {
             throw new SSLException("Engine is closed");
         }
@@ -578,7 +581,9 @@ public final class TlsNioSocket extends NioSocket {
 
         myNetData.clear();
         do {
-            result = engine.wrap(appData, myNetData);
+            result = appData.length == 1
+                    ? engine.wrap(appData[0], myNetData)
+                    : engine.wrap(appData, 0, appData.length, myNetData);
             status = result.getStatus();
             if (status == SSLEngineResult.Status.BUFFER_OVERFLOW) {
                 this.myNetData = reallocate(myNetData,
@@ -600,6 +605,15 @@ public final class TlsNioSocket extends NioSocket {
         }
 
         return result;
+    }
+
+    private static boolean hasRemaining(ByteBuffer[] buffers) {
+        for (ByteBuffer buffer : buffers) {
+            if (buffer.hasRemaining()) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private ByteBuffer reallocate(ByteBuffer buffer, int size, boolean flip) {

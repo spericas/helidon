@@ -34,7 +34,6 @@ public sealed class NioSocket implements HelidonSocket permits TlsNioSocket {
     private static final int BUFFER_LENGTH = 8 * 1024;
 
     private final ByteBuffer readBuffer = ByteBuffer.allocate(BUFFER_LENGTH);
-    private final ByteBuffer writeBuffer = ByteBuffer.allocate(BUFFER_LENGTH);
 
     private final SocketChannel delegate;
     private final String childSocketId;
@@ -125,15 +124,29 @@ public sealed class NioSocket implements HelidonSocket permits TlsNioSocket {
     @Override
     public void write(BufferData buffer) {
         try {
-            while (!buffer.consumed()) {
-                writeBuffer.clear();
-                buffer.writeTo(writeBuffer, buffer.available());
-                writeBuffer.flip();
-                // SocketChannel.write may complete partially, so we must drain the staged bytes before
-                // advancing the source buffer again.
-                while (writeBuffer.hasRemaining()) {
-                    delegate.write(writeBuffer);
+            long remaining = buffer.available();
+            if (remaining == 0) {
+                return;
+            }
+            ByteBuffer[] byteBuffers = buffer.readableByteBuffers();
+            if (byteBuffers.length == 0) {
+                throw new IllegalStateException("Buffer has available data but provided no readable byte buffers");
+            }
+            int offset = 0;
+            while (remaining > 0) {
+                while (offset < byteBuffers.length && !byteBuffers[offset].hasRemaining()) {
+                    offset++;
                 }
+                if (offset == byteBuffers.length) {
+                    throw new IllegalStateException("Readable byte buffers contain fewer bytes than the buffer reports");
+                }
+                long written = delegate.write(byteBuffers, offset, byteBuffers.length - offset);
+                if (written == 0) {
+                    Thread.onSpinWait();
+                    continue;
+                }
+                buffer.skip(Math.toIntExact(written));
+                remaining -= written;
             }
         } catch (IOException e) {
             throw new UncheckedIOException(e);

@@ -16,24 +16,100 @@
 
 package io.helidon.common.buffers;
 
+import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
+import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
 import java.util.HexFormat;
 import java.util.stream.Stream;
 
 import org.hamcrest.Matchers;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
 
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class BufferDataTest {
     static Stream<TestContext> initParams() {
         return Stream.of(new TestContext("fixed", BufferData.create(1024)),
                          new TestContext("growing", BufferData.growing(0)),
                          new TestContext("byte[]", BufferData.create(new byte[1024]).clear()));
+    }
+
+    @Test
+    void growingBufferPreservesBufferWritesWhenExpanded() {
+        byte[] prefix = "abc".getBytes(StandardCharsets.US_ASCII);
+        BufferData buffer = BufferData.growing(1);
+
+        buffer.write(BufferData.create(prefix));
+        buffer.write(new byte[300]);
+        buffer.rewind();
+
+        byte[] actual = new byte[prefix.length];
+        buffer.read(actual);
+        assertArrayEquals(prefix, actual);
+    }
+
+    @Test
+    void growingBufferPreservesInputStreamReadsWhenExpanded() {
+        byte[] prefix = "abc".getBytes(StandardCharsets.US_ASCII);
+        BufferData buffer = BufferData.growing(1);
+
+        buffer.readFrom(new ByteArrayInputStream(prefix));
+        buffer.write(new byte[300]);
+        buffer.rewind();
+
+        byte[] actual = new byte[prefix.length];
+        buffer.read(actual);
+        assertArrayEquals(prefix, actual);
+    }
+
+    @Test
+    void growingBufferReportsWritableBackingCapacity() {
+        BufferData buffer = BufferData.growing(128);
+
+        assertTrue(buffer.capacity() >= 128);
+    }
+
+    @Test
+    void fixedSliceKeepsItsBoundariesAfterRewindAndClear() {
+        byte[] bytes = {9, 1, 2, 3};
+        BufferData buffer = BufferData.create(bytes, 1, 2);
+
+        assertEquals(1, buffer.read());
+        buffer.rewind();
+        assertEquals(1, buffer.read());
+
+        buffer.clear();
+        assertEquals(2, buffer.capacity());
+        buffer.write(new byte[] {4, 5});
+        buffer.rewind();
+        assertEquals(4, buffer.read());
+        assertEquals(9, bytes[0]);
+        assertEquals(3, bytes[3]);
+    }
+
+    @Test
+    void readableByteBuffersExposeCompositeStorageWithoutConsumingIt() {
+        byte[] first = {'a', 'b'};
+        byte[] second = {'c', 'd'};
+        BufferData buffer = BufferData.create(BufferData.create(first), BufferData.create(second));
+
+        ByteBuffer[] views = buffer.readableByteBuffers();
+
+        assertEquals(2, views.length);
+        assertTrue(views[0].isReadOnly());
+        assertEquals(4, buffer.available());
+        first[0] = 'z';
+        assertEquals('z', views[0].get());
+        assertEquals(4, buffer.available());
     }
 
     @ParameterizedTest

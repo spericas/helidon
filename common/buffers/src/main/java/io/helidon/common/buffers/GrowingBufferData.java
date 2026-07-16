@@ -72,10 +72,12 @@ class GrowingBufferData implements BufferData {
 
     @Override
     public int readFrom(InputStream in) {
+        ensureSize(1);
         try {
             int read = in.read(bytes, writePosition, bytes.length - writePosition);
             if (read > 0) {
                 writePosition += read;
+                length = Math.max(length, writePosition);
             }
             return read;
         } catch (IOException e) {
@@ -85,9 +87,11 @@ class GrowingBufferData implements BufferData {
 
     @Override
     public int readFrom(ByteBuffer buf) {
+        ensureSize(1);
         int read = Math.min(buf.remaining(), bytes.length - writePosition);
         buf.get(bytes, writePosition, read);
         writePosition += read;
+        length = Math.max(length, writePosition);
         return read;
     }
 
@@ -150,20 +154,24 @@ class GrowingBufferData implements BufferData {
 
     @Override
     public void write(BufferData toWrite) {
-        ensureSize(toWrite.available());
-        byte[] buffer = new byte[toWrite.available()];
-        int read = toWrite.read(buffer);
-        System.arraycopy(buffer, 0, this.bytes, writePosition, read);
-        writePosition += read;
+        write(toWrite, toWrite.available());
     }
 
     @Override
     public void write(BufferData toWrite, int length) {
         ensureSize(length);
-        byte[] buffer = new byte[length];
-        int read = toWrite.read(buffer);
-        System.arraycopy(buffer, 0, this.bytes, writePosition, read);
+        int read = toWrite.read(this.bytes, writePosition, length);
         writePosition += read;
+        this.length = Math.max(this.length, writePosition);
+    }
+
+    @Override
+    public ByteBuffer[] readableByteBuffers() {
+        if (consumed()) {
+            return new ByteBuffer[0];
+        }
+        ByteBuffer view = ByteBuffer.wrap(bytes, readPosition, available()).slice().asReadOnlyBuffer();
+        return new ByteBuffer[] {view};
     }
 
     @Override
@@ -223,7 +231,7 @@ class GrowingBufferData implements BufferData {
 
     @Override
     public int capacity() {
-        return length - writePosition;
+        return bytes.length - writePosition;
     }
 
     @Override
@@ -241,7 +249,7 @@ class GrowingBufferData implements BufferData {
     }
 
     private void ensureSize(int i) {
-        if (this.bytes.length > writePosition + i) {
+        if (this.bytes.length >= writePosition + i) {
             return;
         }
 
@@ -254,6 +262,6 @@ class GrowingBufferData implements BufferData {
             throw new IllegalStateException("Growing buffer too big, cannot increase size");
         }
         this.bytes = new byte[newLength];
-        System.arraycopy(current, 0, this.bytes, 0, length);
+        System.arraycopy(current, 0, this.bytes, 0, Math.max(length, writePosition));
     }
 }

@@ -27,6 +27,20 @@ import static org.hamcrest.MatcherAssert.assertThat;
 class BufferedDataWriterTest {
 
     @Test
+    void borrowedWriteUsesNormalBuffering() {
+        TestHelidonSocket socket = new TestHelidonSocket();
+        TcpClientConnection.BufferedDataWriter writer = new TcpClientConnection.BufferedDataWriter(socket, 5);
+        BufferData data = BufferData.create("12");
+
+        writer.writeBorrowed(data);
+
+        assertThat(data.consumed(), is(true));
+        assertThat(socket.writeCounter(), is(0));
+        writer.flush();
+        assertThat(socket.writeCounter(), is(2));
+    }
+
+    @Test
     void testBufferFull() {
         TestHelidonSocket socket = new TestHelidonSocket();
         try (TcpClientConnection.BufferedDataWriter writer = new TcpClientConnection.BufferedDataWriter(socket, 5)) {

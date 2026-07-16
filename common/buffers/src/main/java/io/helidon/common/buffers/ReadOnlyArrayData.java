@@ -108,6 +108,15 @@ class ReadOnlyArrayData extends ReadOnlyBufferData {
     }
 
     @Override
+    public ByteBuffer[] readableByteBuffers() {
+        if (consumed()) {
+            return new ByteBuffer[0];
+        }
+        ByteBuffer view = ByteBuffer.wrap(bytes, offset + position, available()).slice().asReadOnlyBuffer();
+        return new ByteBuffer[] {view};
+    }
+
+    @Override
     public String debugDataBinary() {
         return BufferUtil.debugDataBinary(bytes, offset + position, length - position);
     }

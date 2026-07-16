@@ -151,6 +151,11 @@ public class Http2FlowControlJmhTest {
         }
 
         @Override
+        public void writeBorrowed(BufferData buffer) {
+            write(buffer);
+        }
+
+        @Override
         public void writeNow(BufferData... buffers) {
         }
 
