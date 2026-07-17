@@ -53,17 +53,19 @@ import static org.mockito.Mockito.when;
 class TlsNioSocketTest {
 
     @Test
-    void writeWrapsCompositeBufferComponentsDirectly() throws Exception {
+    void largeBorrowedWriteWrapsCompositeBufferComponentsDirectly() throws Exception {
         BlockingSocketChannel channel = new BlockingSocketChannel();
         channel.allowWriteToFinish();
         SSLEngine engine = mock(SSLEngine.class);
         SSLSession session = mock(SSLSession.class);
         AtomicInteger wrappedComponents = new AtomicInteger();
+        byte[] first = new byte[NioSocket.GATHERING_WRITE_THRESHOLD / 2];
+        byte[] second = new byte[NioSocket.GATHERING_WRITE_THRESHOLD / 2 + 1];
 
         when(engine.getSession()).thenReturn(session);
         when(engine.getHandshakeStatus()).thenReturn(SSLEngineResult.HandshakeStatus.NOT_HANDSHAKING);
-        when(session.getPacketBufferSize()).thenReturn(64);
-        when(session.getApplicationBufferSize()).thenReturn(64);
+        when(session.getPacketBufferSize()).thenReturn(NioSocket.GATHERING_WRITE_THRESHOLD * 2);
+        when(session.getApplicationBufferSize()).thenReturn(NioSocket.GATHERING_WRITE_THRESHOLD * 2);
         when(engine.wrap(any(ByteBuffer[].class), anyInt(), anyInt(), any(ByteBuffer.class))).thenAnswer(invocation -> {
             ByteBuffer[] sources = invocation.getArgument(0);
             int offset = invocation.getArgument(1);
@@ -82,12 +84,53 @@ class TlsNioSocketTest {
                                        consumed,
                                        consumed);
         });
+        BufferData buffer = BufferData.create(BufferData.create(first), BufferData.create(second));
+        TlsNioSocket socket = TlsNioSocket.server(channel, engine, "listener", "server");
+
+        socket.writeBorrowed(buffer);
+
+        assertEquals(2, wrappedComponents.get());
+        assertTrue(buffer.consumed());
+    }
+
+    @Test
+    void normalCompositeWriteUsesTlsStagingBuffer() throws Exception {
+        BlockingSocketChannel channel = new BlockingSocketChannel();
+        channel.allowWriteToFinish();
+        SSLEngine engine = mock(SSLEngine.class);
+        SSLSession session = mock(SSLSession.class);
+        AtomicInteger singleBufferWraps = new AtomicInteger();
+        AtomicInteger gatheredWraps = new AtomicInteger();
+
+        when(engine.getSession()).thenReturn(session);
+        when(engine.getHandshakeStatus()).thenReturn(SSLEngineResult.HandshakeStatus.NOT_HANDSHAKING);
+        when(session.getPacketBufferSize()).thenReturn(64);
+        when(session.getApplicationBufferSize()).thenReturn(64);
+        when(engine.wrap(any(ByteBuffer.class), any(ByteBuffer.class))).thenAnswer(invocation -> {
+            ByteBuffer source = invocation.getArgument(0);
+            ByteBuffer destination = invocation.getArgument(1);
+            int consumed = source.remaining();
+            destination.put(source);
+            singleBufferWraps.incrementAndGet();
+            return new SSLEngineResult(SSLEngineResult.Status.OK,
+                                       SSLEngineResult.HandshakeStatus.NOT_HANDSHAKING,
+                                       consumed,
+                                       consumed);
+        });
+        when(engine.wrap(any(ByteBuffer[].class), anyInt(), anyInt(), any(ByteBuffer.class))).thenAnswer(invocation -> {
+            gatheredWraps.incrementAndGet();
+            return new SSLEngineResult(SSLEngineResult.Status.OK,
+                                       SSLEngineResult.HandshakeStatus.NOT_HANDSHAKING,
+                                       0,
+                                       0);
+        });
         BufferData buffer = BufferData.create(BufferData.create("one"), BufferData.create("two"));
         TlsNioSocket socket = TlsNioSocket.server(channel, engine, "listener", "server");
 
         socket.write(buffer);
 
-        assertEquals(2, wrappedComponents.get());
+        assertEquals(1, singleBufferWraps.get());
+        assertEquals(0, gatheredWraps.get());
         assertTrue(buffer.consumed());
     }
 

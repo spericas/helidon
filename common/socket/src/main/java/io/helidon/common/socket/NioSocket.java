@@ -25,6 +25,7 @@ import java.nio.ByteBuffer;
 import java.nio.channels.SocketChannel;
 
 import io.helidon.common.buffers.BufferData;
+import io.helidon.common.buffers.CompositeBufferData;
 
 /**
  * Plain socket based on NIO {@link java.nio.channels.SocketChannel}.
@@ -32,8 +33,10 @@ import io.helidon.common.buffers.BufferData;
  */
 public sealed class NioSocket implements HelidonSocket permits TlsNioSocket {
     private static final int BUFFER_LENGTH = 8 * 1024;
+    static final int GATHERING_WRITE_THRESHOLD = BUFFER_LENGTH;
 
     private final ByteBuffer readBuffer = ByteBuffer.allocate(BUFFER_LENGTH);
+    private ByteBuffer writeBuffer;
 
     private final SocketChannel delegate;
     private final String childSocketId;
@@ -124,12 +127,55 @@ public sealed class NioSocket implements HelidonSocket permits TlsNioSocket {
     @Override
     public void write(BufferData buffer) {
         try {
-            long remaining = buffer.available();
-            if (remaining == 0) {
-                return;
+            while (!buffer.consumed()) {
+                ByteBuffer writeBuffer = writeBuffer(buffer.available());
+                writeBuffer.clear();
+                buffer.writeTo(writeBuffer, buffer.available());
+                writeBuffer.flip();
+                // SocketChannel.write may complete partially, so drain the staged bytes before reading the source again.
+                while (writeBuffer.hasRemaining()) {
+                    delegate.write(writeBuffer);
+                }
             }
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
+    }
+
+    private ByteBuffer writeBuffer(int available) {
+        int requiredCapacity = Math.min(BUFFER_LENGTH, available);
+        ByteBuffer current = writeBuffer;
+        if (current == null || current.capacity() < requiredCapacity) {
+            current = ByteBuffer.allocate(requiredCapacity);
+            writeBuffer = current;
+        }
+        return current;
+    }
+
+    @Override
+    public void writeBorrowed(BufferData buffer) {
+        if (!useGatheringWrite(buffer)) {
+            write(buffer);
+            return;
+        }
+        writeGathered(buffer);
+    }
+
+    /**
+     * Whether avoiding the staging copy is likely to amortize the buffer-view and gathering-write setup.
+     *
+     * @param buffer buffer to inspect
+     * @return whether to use gathering write
+     */
+    protected static boolean useGatheringWrite(BufferData buffer) {
+        return buffer instanceof CompositeBufferData && buffer.available() > GATHERING_WRITE_THRESHOLD;
+    }
+
+    private void writeGathered(BufferData buffer) {
+        try {
+            long remaining = buffer.available();
             ByteBuffer[] byteBuffers = buffer.readableByteBuffers();
-            if (byteBuffers.length == 0) {
+            if (remaining > 0 && byteBuffers.length == 0) {
                 throw new IllegalStateException("Buffer has available data but provided no readable byte buffers");
             }
             int offset = 0;

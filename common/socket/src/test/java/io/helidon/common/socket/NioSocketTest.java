@@ -89,7 +89,7 @@ public class NioSocketTest {
     }
 
     @Test
-    void writerUsesGatheringWriteForCompositeBuffer() {
+    void normalCompositeWriteUsesReusableStagingBuffer() {
         byte[] first = "header".getBytes(StandardCharsets.US_ASCII);
         byte[] second = "body".getBytes(StandardCharsets.US_ASCII);
         byte[] third = "trailer".getBytes(StandardCharsets.US_ASCII);
@@ -100,7 +100,50 @@ public class NioSocketTest {
 
         assertEquals(new String(concat(first, second, third), StandardCharsets.US_ASCII),
                      new String(channel.writtenBytes(), StandardCharsets.US_ASCII));
-        assertEquals(3, channel.maxGatheredBuffers());
+        assertEquals(0, channel.maxGatheredBuffers());
+    }
+
+    @Test
+    void smallBorrowedCompositeWriteUsesReusableStagingBuffer() {
+        byte[] first = "header".getBytes(StandardCharsets.US_ASCII);
+        byte[] second = "body".getBytes(StandardCharsets.US_ASCII);
+        CapturingSocketChannel channel = new CapturingSocketChannel(3);
+        SocketWriter writer = SocketWriter.create(NioSocket.server(channel, "child", "server"));
+
+        writer.writeBorrowed(BufferData.create(BufferData.create(first), BufferData.create(second)));
+
+        assertEquals(new String(concat(first, second), StandardCharsets.US_ASCII),
+                     new String(channel.writtenBytes(), StandardCharsets.US_ASCII));
+        assertEquals(0, channel.maxGatheredBuffers());
+    }
+
+    @Test
+    void largeBorrowedCompositeWriteUsesGatheringWrite() {
+        byte[] first = new byte[NioSocket.GATHERING_WRITE_THRESHOLD / 2];
+        byte[] second = new byte[NioSocket.GATHERING_WRITE_THRESHOLD / 2 + 1];
+        Arrays.fill(first, (byte) 'a');
+        Arrays.fill(second, (byte) 'b');
+        CapturingSocketChannel channel = new CapturingSocketChannel(1024);
+        SocketWriter writer = SocketWriter.create(NioSocket.server(channel, "child", "server"));
+
+        writer.writeBorrowed(BufferData.create(BufferData.create(first), BufferData.create(second)));
+
+        assertEquals(new String(concat(first, second), StandardCharsets.US_ASCII),
+                     new String(channel.writtenBytes(), StandardCharsets.US_ASCII));
+        assertEquals(2, channel.maxGatheredBuffers());
+    }
+
+    @Test
+    void largeNormalCompositeWriteStillUsesReusableStagingBuffer() {
+        byte[] first = new byte[NioSocket.GATHERING_WRITE_THRESHOLD / 2];
+        byte[] second = new byte[NioSocket.GATHERING_WRITE_THRESHOLD / 2 + 1];
+        CapturingSocketChannel channel = new CapturingSocketChannel(1024);
+        SocketWriter writer = SocketWriter.create(NioSocket.server(channel, "child", "server"));
+
+        writer.write(BufferData.create(BufferData.create(first), BufferData.create(second)));
+
+        assertEquals(NioSocket.GATHERING_WRITE_THRESHOLD + 1, channel.writtenBytes().length);
+        assertEquals(0, channel.maxGatheredBuffers());
     }
 
     private static void assertWrittenBytes(int maxBytesPerWrite, byte[]... writes) {

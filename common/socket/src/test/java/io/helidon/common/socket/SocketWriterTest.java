@@ -419,7 +419,7 @@ class SocketWriterTest {
     }
 
     @Test
-    void directWriterBorrowedWriteUsesNormalWrite() {
+    void directWriterBorrowedWriteUsesBorrowedSocketPath() {
         TestSocket socket = new TestSocket(false);
         SocketWriter writer = SocketWriter.create(socket.socket());
         BufferData buffer = BufferData.create(new byte[] {1});
@@ -763,6 +763,10 @@ class SocketWriterTest {
                 write(invocation.getArgument(0));
                 return null;
             }).when(socket).write(any(BufferData.class));
+            doAnswer(invocation -> {
+                write(invocation.getArgument(0));
+                return null;
+            }).when(socket).writeBorrowed(any(BufferData.class));
         }
 
         private HelidonSocket socket() {

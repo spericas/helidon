@@ -51,23 +51,59 @@ import static org.mockito.Mockito.when;
 class Http1ServerResponseTest {
 
     @Test
-    void directSendUsesBorrowedWrite() {
+    void smallDirectSendUsesNormalWrite() {
         DataWriter dataWriter = mock(DataWriter.class);
         Http1ServerResponse response = createResponse(dataWriter);
 
         response.send("hello".getBytes(StandardCharsets.UTF_8));
+
+        verify(dataWriter).write(any(BufferData.class));
+        verify(dataWriter, never()).writeBorrowed(any(BufferData.class));
+    }
+
+    @Test
+    void largeDirectSendUsesBorrowedWrite() {
+        DataWriter dataWriter = mock(DataWriter.class);
+        Http1ServerResponse response = createResponse(dataWriter);
+
+        response.send(new byte[8 * 1024 + 1]);
 
         verify(dataWriter).writeBorrowed(any(BufferData.class));
         verify(dataWriter, never()).write(any(BufferData.class));
     }
 
     @Test
-    void fixedLengthStreamUsesBorrowedWrite() throws Exception {
+    void directSendAtStagingThresholdUsesNormalWrite() {
+        DataWriter dataWriter = mock(DataWriter.class);
+        Http1ServerResponse response = createResponse(dataWriter);
+
+        response.send(new byte[8 * 1024]);
+
+        verify(dataWriter).write(any(BufferData.class));
+        verify(dataWriter, never()).writeBorrowed(any(BufferData.class));
+    }
+
+    @Test
+    void smallFixedLengthStreamUsesNormalWrite() throws Exception {
         DataWriter dataWriter = mock(DataWriter.class);
         Http1ServerResponse response = createResponse(dataWriter);
         response.contentLength(5);
 
         response.outputStream().write("hello".getBytes(StandardCharsets.UTF_8));
+        response.commit();
+
+        verify(dataWriter).write(any(BufferData.class));
+        verify(dataWriter, never()).writeBorrowed(any(BufferData.class));
+    }
+
+    @Test
+    void largeFixedLengthStreamUsesBorrowedWrite() throws Exception {
+        DataWriter dataWriter = mock(DataWriter.class);
+        Http1ServerResponse response = createResponse(dataWriter);
+        byte[] bytes = new byte[8 * 1024 + 1];
+        response.contentLength(bytes.length);
+
+        response.outputStream().write(bytes);
         response.commit();
 
         verify(dataWriter).writeBorrowed(any(BufferData.class));

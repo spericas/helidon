@@ -44,11 +44,21 @@ public interface HelidonSocket extends SocketContext, Supplier<byte[]> {
     boolean isConnected();
 
     /**
-     * Write teh buffer to the underlying socket. This method blocks until all bytes are written.
+     * Write the buffer to the underlying socket. This method blocks until all bytes are written.
      *
      * @param buffer buffer to write
      */
     void write(BufferData buffer);
+
+    /**
+     * Write a caller-owned buffer to the underlying socket. This method blocks until all bytes are written and does not
+     * retain the buffer or its backing storage after returning.
+     *
+     * @param buffer borrowed buffer to write
+     */
+    default void writeBorrowed(BufferData buffer) {
+        write(buffer);
+    }
 
     /**
      * Whether a protocol was negotiated by the socket (such as ALPN when using TLS).

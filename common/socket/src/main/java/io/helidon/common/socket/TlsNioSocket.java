@@ -221,11 +221,24 @@ public final class TlsNioSocket extends NioSocket {
 
     @Override
     public void write(BufferData buffer) {
+        write(buffer, false);
+    }
+
+    @Override
+    public void writeBorrowed(BufferData buffer) {
+        write(buffer, useGatheringWrite(buffer));
+    }
+
+    private void write(BufferData buffer, boolean gathered) {
         idle = false;
         // Handshake/closure and normal writes reuse the same TLS staging buffers.
         handshakeLock.lock();
         try {
-            doWrite(buffer);
+            if (gathered) {
+                doWriteGathered(buffer);
+            } else {
+                doWrite(buffer);
+            }
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         } finally {
@@ -522,6 +535,26 @@ public final class TlsNioSocket extends NioSocket {
             return;
         }
         ensureHandshakeBeforeWrite();
+        while (!buffer.consumed()) {
+            myAppData.clear();
+            buffer.writeTo(myAppData, buffer.available());
+            myAppData.flip();
+
+            while (myAppData.hasRemaining()) {
+                SSLEngineResult result = wrapAndSend(myAppData, false);
+                handleWriteResult(result);
+                if (result.getStatus() == SSLEngineResult.Status.CLOSED) {
+                    return;
+                }
+            }
+        }
+    }
+
+    private void doWriteGathered(BufferData buffer) throws IOException {
+        if (buffer.consumed()) {
+            return;
+        }
+        ensureHandshakeBeforeWrite();
         ByteBuffer[] appData = buffer.readableByteBuffers();
         if (appData.length == 0) {
             throw new IllegalStateException("Buffer has available data but provided no readable byte buffers");
@@ -529,16 +562,22 @@ public final class TlsNioSocket extends NioSocket {
         while (hasRemaining(appData)) {
             SSLEngineResult result = wrapAndSend(appData, false);
             buffer.skip(result.bytesConsumed());
-            SSLEngineResult.Status status = result.getStatus();
-            if (status == SSLEngineResult.Status.CLOSED) {
-                doClosure();
+            handleWriteResult(result);
+            if (result.getStatus() == SSLEngineResult.Status.CLOSED) {
                 return;
             }
-            SSLEngineResult.HandshakeStatus handshakeStatus = result.getHandshakeStatus();
-            if (handshakeStatus != SSLEngineResult.HandshakeStatus.FINISHED
-                    && handshakeStatus != SSLEngineResult.HandshakeStatus.NOT_HANDSHAKING) {
-                doHandshake(handshakeStatus);
-            }
+        }
+    }
+
+    private void handleWriteResult(SSLEngineResult result) throws IOException {
+        if (result.getStatus() == SSLEngineResult.Status.CLOSED) {
+            doClosure();
+            return;
+        }
+        SSLEngineResult.HandshakeStatus handshakeStatus = result.getHandshakeStatus();
+        if (handshakeStatus != SSLEngineResult.HandshakeStatus.FINISHED
+                && handshakeStatus != SSLEngineResult.HandshakeStatus.NOT_HANDSHAKING) {
+            doHandshake(handshakeStatus);
         }
     }
 
@@ -569,10 +608,16 @@ public final class TlsNioSocket extends NioSocket {
     }
 
     private SSLEngineResult wrapAndSend(ByteBuffer appData, boolean ignoreClose) throws SSLException {
-        return wrapAndSend(new ByteBuffer[] {appData}, ignoreClose);
+        return wrapAndSend(appData, null, ignoreClose);
     }
 
     private SSLEngineResult wrapAndSend(ByteBuffer[] appData, boolean ignoreClose) throws SSLException {
+        return wrapAndSend(null, appData, ignoreClose);
+    }
+
+    private SSLEngineResult wrapAndSend(ByteBuffer appData,
+                                        ByteBuffer[] gatheredAppData,
+                                        boolean ignoreClose) throws SSLException {
         if (closed && !ignoreClose) {
             throw new SSLException("Engine is closed");
         }
@@ -581,9 +626,9 @@ public final class TlsNioSocket extends NioSocket {
 
         myNetData.clear();
         do {
-            result = appData.length == 1
-                    ? engine.wrap(appData[0], myNetData)
-                    : engine.wrap(appData, 0, appData.length, myNetData);
+            result = appData == null
+                    ? engine.wrap(gatheredAppData, 0, gatheredAppData.length, myNetData)
+                    : engine.wrap(appData, myNetData);
             status = result.getStatus();
             if (status == SSLEngineResult.Status.BUFFER_OVERFLOW) {
                 this.myNetData = reallocate(myNetData,

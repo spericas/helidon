@@ -82,7 +82,11 @@ public class SmartSocketWriter extends SocketWriter {
             checkOpen();
             if (!asyncMode) {
                 // Sync mode intentionally bypasses the async writer, but remains serialized by writeLock.
-                super.writeNow(buffer);       // blocking write
+                if (borrowed) {
+                    socket().writeBorrowed(buffer);
+                } else {
+                    super.writeNow(buffer);       // blocking write
+                }
                 return;
             }
 

@@ -79,8 +79,10 @@ public class HttpJmhTest {
         Arrays.fill(LARGE_RESPONSE_BYTES, (byte) 'H');
     }
 
-    private WebServer server;
-    private int serverPort;
+    private WebServer directServer;
+    private WebServer asyncServer;
+    private int directServerPort;
+    private int asyncServerPort;
     private HttpClient http1Client;
     private HttpClient http2Client;
     private Http2Client helidonHttp2Client;
@@ -92,26 +94,10 @@ public class HttpJmhTest {
                 .maxConcurrentStreams(1)
                 .build();
 
-        server = WebServer.builder()
-                .addProtocol(http2Config)
-                .addConnectionSelector(Http2ConnectionSelector.builder()
-                                               .http2Config(http2Config)
-                                               .build())
-                .connectionOptions(builder -> builder
-                        .readTimeout(Duration.ZERO)
-                        .connectTimeout(Duration.ZERO)
-                        .socketSendBufferSize(64000)
-                        .socketReceiveBufferSize(64000))
-                .writeQueueLength(4000)
-                .host(SERVER_HOST)
-                .backlog(8192)
-                .routing(router -> router
-                        .route(Http1Route.route(Method.GET, "/plaintext", new PlaintextHandler()))
-                        .route(Http2Route.route(Method.GET, "/http2-large", new LargeHttp2Handler())))
-                .build()
-                .start();
-
-        serverPort = server.port();
+        directServer = startServer(http2Config, 0);
+        asyncServer = startServer(http2Config, 4000);
+        directServerPort = directServer.port();
+        asyncServerPort = asyncServer.port();
 
         http2Client = HttpClient.newBuilder()
                 .version(HttpClient.Version.HTTP_2)
@@ -126,21 +112,63 @@ public class HttpJmhTest {
         helidonHttp2Client = Http2Client.builder()
                 .shareConnectionCache(false)
                 .protocolConfig(http2 -> http2.priorKnowledge(true))
-                .baseUri("http://" + SERVER_HOST + ":" + serverPort)
+                .baseUri("http://" + SERVER_HOST + ":" + asyncServerPort)
                 .build();
+    }
+
+    private static WebServer startServer(Http2Config http2Config, int writeQueueLength) {
+        return WebServer.builder()
+                .addProtocol(http2Config)
+                .addConnectionSelector(Http2ConnectionSelector.builder()
+                                               .http2Config(http2Config)
+                                               .build())
+                .connectionOptions(builder -> builder
+                        .readTimeout(Duration.ZERO)
+                        .connectTimeout(Duration.ZERO)
+                        .socketSendBufferSize(64000)
+                        .socketReceiveBufferSize(64000))
+                .writeQueueLength(writeQueueLength)
+                .host(SERVER_HOST)
+                .backlog(8192)
+                .routing(router -> router
+                        .route(Http1Route.route(Method.GET, "/plaintext", new PlaintextHandler()))
+                        .route(Http1Route.route(Method.GET, "/plaintext-output-stream", new OutputStreamPlaintextHandler()))
+                        .route(Http2Route.route(Method.GET, "/http2-large", new LargeHttp2Handler())))
+                .build()
+                .start();
     }
 
     @TearDown
     public void tearDown() {
         helidonHttp2Client.closeResource();
-        server.stop();
+        directServer.stop();
+        asyncServer.stop();
     }
 
     @Benchmark
-    public void http1(Blackhole bh) throws IOException, InterruptedException {
+    public void http1ByteArrayDirect(Blackhole bh) throws IOException, InterruptedException {
+        sendHttp1(directServerPort, "/plaintext", bh);
+    }
+
+    @Benchmark
+    public void http1ByteArrayAsync(Blackhole bh) throws IOException, InterruptedException {
+        sendHttp1(asyncServerPort, "/plaintext", bh);
+    }
+
+    @Benchmark
+    public void http1SingleWriteOutputStreamDirect(Blackhole bh) throws IOException, InterruptedException {
+        sendHttp1(directServerPort, "/plaintext-output-stream", bh);
+    }
+
+    @Benchmark
+    public void http1SingleWriteOutputStreamAsync(Blackhole bh) throws IOException, InterruptedException {
+        sendHttp1(asyncServerPort, "/plaintext-output-stream", bh);
+    }
+
+    private void sendHttp1(int port, String path, Blackhole bh) throws IOException, InterruptedException {
         HttpRequest request = HttpRequest.newBuilder()
                 .GET()
-                .uri(URI.create("http://" + SERVER_HOST + ":" + serverPort + "/plaintext"))
+                .uri(URI.create("http://" + SERVER_HOST + ":" + port + path))
                 .build();
         HttpResponse<byte[]> response = http1Client.send(request, HttpResponse.BodyHandlers.ofByteArray());
         bh.consume(response);
@@ -149,7 +177,7 @@ public class HttpJmhTest {
     @Benchmark
     public void http1NewConnection(Blackhole bh) throws IOException {
         byte[] responseBuffer = new byte[1024];
-        try (Socket socket = new Socket(SERVER_HOST, serverPort)) {
+        try (Socket socket = new Socket(SERVER_HOST, asyncServerPort)) {
             socket.setTcpNoDelay(true);
             socket.setSoTimeout(SOCKET_READ_TIMEOUT_MILLIS);
             OutputStream output = socket.getOutputStream();
@@ -166,7 +194,7 @@ public class HttpJmhTest {
     public void http2(Blackhole bh) throws IOException, InterruptedException {
         HttpRequest request = HttpRequest.newBuilder()
                 .GET()
-                .uri(URI.create("http://" + SERVER_HOST + ":" + serverPort + "/plaintext"))
+                .uri(URI.create("http://" + SERVER_HOST + ":" + asyncServerPort + "/plaintext"))
                 .build();
         HttpResponse<byte[]> response = http2Client.send(request, HttpResponse.BodyHandlers.ofByteArray());
         bh.consume(response);
@@ -233,6 +261,18 @@ public class HttpJmhTest {
             res.header(CONTENT_TYPE);
             res.header(SERVER);
             res.send(RESPONSE_BYTES);
+        }
+    }
+
+    private static class OutputStreamPlaintextHandler implements Handler {
+        @Override
+        public void handle(ServerRequest req, ServerResponse res) throws IOException {
+            res.header(CONTENT_LENGTH);
+            res.header(CONTENT_TYPE);
+            res.header(SERVER);
+            try (OutputStream output = res.outputStream()) {
+                output.write(RESPONSE_BYTES);
+            }
         }
     }
 

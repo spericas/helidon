@@ -45,6 +45,6 @@ class SocketWriterDirect extends SocketWriter implements DataWriter {
 
     @Override
     public void writeBorrowed(BufferData buffer) {
-        write(buffer);
+        socket().writeBorrowed(buffer);
     }
 }
